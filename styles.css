@@ -88,10 +88,25 @@ main { padding-bottom: 48px; }
   border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px;
 }
 .ghost-button:hover, .download:hover { border-color: var(--axis); }
-.download { float: right; font-size: 12px; padding: 3px 8px; color: var(--text-secondary); margin-left: 8px; }
+.download { font-size: 12px; padding: 3px 8px; color: var(--text-secondary); }
+.export-menu { position: relative; display: inline-block; }
+.card-head > .export-menu { float: right; margin-left: 8px; }
+.export-menu summary { list-style: none; user-select: none; }
+.export-menu summary::-webkit-details-marker { display: none; }
+.export-menu .menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 10; min-width: 170px;
+  display: flex; flex-direction: column; padding: 4px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.export-menu .menu button {
+  font: inherit; font-size: 13px; text-align: left; color: var(--text-primary);
+  background: none; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer;
+}
+.export-menu .menu button:hover, .export-menu .menu button:focus-visible { background: var(--border); }
 .title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
 .title-row .tools { display: flex; gap: 8px; align-items: center; }
-.title-row .download { float: none; margin: 0; }
+
 .title-row + .subtle { margin-top: 6px; }
 .segmented { display: inline-flex; max-width: 100%; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-left: 8px; }
 .segmented button {

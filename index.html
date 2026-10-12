@@ -123,7 +123,14 @@
                 <button type="button" data-mode="up" aria-pressed="true">Burn-up</button>
                 <button type="button" data-mode="down" aria-pressed="false">Burn-down</button>
               </div>
-              <button type="button" class="download" data-chart="chart-burnup" title="Download as PNG">PNG</button>
+              <details class="export-menu" data-chart="chart-burnup">
+                <summary class="download" title="Download as PNG">PNG ▾</summary>
+                <div class="menu" role="menu">
+                  <button type="button" role="menuitem" data-bg="light">Light background</button>
+                  <button type="button" role="menuitem" data-bg="dark">Dark background</button>
+                  <button type="button" role="menuitem" data-bg="transparent">Transparent</button>
+                </div>
+              </details>
             </div>
           </div>
           <p class="subtle" id="burnup-sub"></p>
@@ -135,7 +142,14 @@
       <div class="grid-2">
         <section class="card">
           <div class="card-head">
-            <button type="button" class="download" data-chart="chart-velocity" title="Download as PNG">PNG</button>
+            <details class="export-menu" data-chart="chart-velocity">
+              <summary class="download" title="Download as PNG">PNG ▾</summary>
+              <div class="menu" role="menu">
+                <button type="button" role="menuitem" data-bg="light">Light background</button>
+                <button type="button" role="menuitem" data-bg="dark">Dark background</button>
+                <button type="button" role="menuitem" data-bg="transparent">Transparent</button>
+              </div>
+            </details>
             <h2>Velocity per week</h2>
             <p class="subtle" id="velocity-sub"></p>
           </div>
@@ -154,7 +168,14 @@
                   <button type="button" data-mode="split" aria-pressed="true">Created vs completed</button>
                   <button type="button" data-mode="net" aria-pressed="false">Net</button>
                 </div>
-                <button type="button" class="download" data-chart="chart-tickets" title="Download as PNG">PNG</button>
+                <details class="export-menu" data-chart="chart-tickets">
+                  <summary class="download" title="Download as PNG">PNG ▾</summary>
+                  <div class="menu" role="menu">
+                    <button type="button" role="menuitem" data-bg="light">Light background</button>
+                    <button type="button" role="menuitem" data-bg="dark">Dark background</button>
+                    <button type="button" role="menuitem" data-bg="transparent">Transparent</button>
+                  </div>
+                </details>
               </div>
             </div>
             <p class="subtle" id="tickets-sub"></p>
@@ -171,7 +192,14 @@
 
       <section class="card">
         <div class="card-head">
-          <button type="button" class="download" data-chart="chart-mc" title="Download as PNG">PNG</button>
+          <details class="export-menu" data-chart="chart-mc">
+            <summary class="download" title="Download as PNG">PNG ▾</summary>
+            <div class="menu" role="menu">
+              <button type="button" role="menuitem" data-bg="light">Light background</button>
+              <button type="button" role="menuitem" data-bg="dark">Dark background</button>
+              <button type="button" role="menuitem" data-bg="transparent">Transparent</button>
+            </div>
+          </details>
           <h2>Chance of finishing by date</h2>
           <p class="subtle" id="mc-sub"></p>
         </div>

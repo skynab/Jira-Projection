@@ -305,8 +305,10 @@
         const tx = right ? x - 4 - w : x + 4;
         const ty = chartArea.top + 12 + (l.row || 0) * 16;
         // Surface-coloured backing so labels stay readable over the data.
-        ctx.fillStyle = css('--surface');
-        ctx.fillRect(tx - 2, ty - 11, w + 4, 15);
+        if (!exporting.transparent) {
+          ctx.fillStyle = css('--surface');
+          ctx.fillRect(tx - 2, ty - 11, w + 4, 15);
+        }
         ctx.fillStyle = opts.textColor;
         ctx.fillText(l.label, tx, ty);
         ctx.restore();
@@ -344,10 +346,15 @@
     };
   }
 
+  // Export state: while a PNG is being produced, charts can skip the background and
+  // render at a higher pixel ratio.
+  const exporting = { transparent: false, pixelRatio: null };
+
   // Paints the card surface behind the chart so downloaded PNGs aren't transparent.
   const backgroundPlugin = {
     id: 'surface',
     beforeDraw(chart) {
+      if (exporting.transparent) return;
       const { ctx, width, height } = chart;
       ctx.save();
       ctx.globalCompositeOperation = 'destination-over';
@@ -359,6 +366,7 @@
 
   function draw(id, config) {
     if (charts[id]) charts[id].destroy();
+    if (exporting.pixelRatio) config.options.devicePixelRatio = exporting.pixelRatio;
     charts[id] = new Chart($(id), Object.assign({ plugins: [vlinePlugin, backgroundPlugin] }, config));
   }
 
@@ -754,13 +762,51 @@
     setTimeout(() => ($('copy-status').textContent = ''), 2000);
   });
 
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('button.download');
-    if (!btn || !charts[btn.dataset.chart]) return;
+  const chartRenderers = {
+    'chart-burnup': renderTrend,
+    'chart-velocity': renderVelocity,
+    'chart-tickets': renderTickets,
+    'chart-mc': renderMonteCarlo,
+  };
+
+  // Re-draws one chart in the requested theme at 2x, captures it, then restores the
+  // on-screen version. Everything happens synchronously, so nothing flickers.
+  function exportChart(id, bg) {
+    if (!current || current.empty || !charts[id]) return;
+    const root = document.documentElement;
+    const prevTheme = root.getAttribute('data-theme');
+    if (bg === 'light' || bg === 'dark') root.setAttribute('data-theme', bg);
+    exporting.transparent = bg === 'transparent';
+    exporting.pixelRatio = Math.max(2, window.devicePixelRatio || 1);
+    let url;
+    try {
+      chartRenderers[id](current);
+      url = charts[id].toBase64Image('image/png');
+    } finally {
+      exporting.transparent = false;
+      exporting.pixelRatio = null;
+      if (prevTheme == null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme', prevTheme);
+      chartRenderers[id](current);
+    }
     const a = document.createElement('a');
-    a.href = charts[btn.dataset.chart].toBase64Image('image/png');
-    a.download = `${(settings.version || 'release').replace(/[^\w.-]+/g, '_')}-${btn.dataset.chart.replace('chart-', '')}.png`;
+    a.href = url;
+    a.download = `${(settings.version || 'release').replace(/[^\w.-]+/g, '_')}-${id.replace('chart-', '')}-${bg}.png`;
     a.click();
+  }
+
+  document.addEventListener('click', (e) => {
+    const item = e.target.closest('.export-menu .menu button[data-bg]');
+    if (item) {
+      const menu = item.closest('.export-menu');
+      menu.open = false;
+      exportChart(menu.dataset.chart, item.dataset.bg);
+      return;
+    }
+    // Clicking anywhere else closes any open export menu.
+    document.querySelectorAll('.export-menu[open]').forEach((m) => { if (!m.contains(e.target)) m.open = false; });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.querySelectorAll('.export-menu[open]').forEach((m) => { m.open = false; m.querySelector('summary').focus(); });
   });
 
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
