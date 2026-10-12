@@ -99,6 +99,10 @@ main { padding-bottom: 48px; }
   padding: 4px 10px; cursor: pointer;
 }
 .segmented button { white-space: nowrap; }
+.compact-select {
+  font: inherit; font-size: 12.5px; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 3px 6px;
+}
 .segmented button + button { border-left: 1px solid var(--border); }
 .segmented button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .card-head .hint { margin-top: 4px; }

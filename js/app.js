@@ -39,7 +39,7 @@
   // Modelling preferences (not file-specific filters) survive reloads in this browser.
 
   const STORE_KEY = 'jira-projection:settings';
-  const PERSIST = ['hoursPerDay', 'daysUncertainty', 'fillMissing', 'fitWeeks', 'polyDegree', 'rollWeeks', 'mcUncertainty', 'mcScopeGrowth'];
+  const PERSIST = ['hoursPerDay', 'daysUncertainty', 'fillMissing', 'fitWeeks', 'polyDegree', 'rollWeeks', 'mcUncertainty', 'mcScopeGrowth', 'flowBucket'];
   function loadPrefs() {
     try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
   }
@@ -119,6 +119,8 @@
     const d = P.DEFAULT_SETTINGS;
     const prefs = loadPrefs();
     for (const k of PERSIST) settings[k] = k in prefs ? prefs[k] : d[k];
+    if (settings.flowBucket !== 2) settings.flowBucket = 1;
+    $('flow-bucket').value = String(settings.flowBucket);
     $('ctl-hpd').value = settings.hoursPerDay;
     $('ctl-unc').value = Math.round(settings.daysUncertainty * 100);
     $('ctl-fill').value = settings.fillMissing;
@@ -407,6 +409,27 @@
   }
   onToggle('trend-toggle', (mode) => { chartMode = mode; renderTrend(current); });
   onToggle('flow-toggle', (mode) => { flowMode = mode; renderTickets(current); });
+  $('flow-bucket').addEventListener('change', (e) => {
+    settings.flowBucket = +e.target.value;
+    savePrefs();
+    if (current && !current.empty) renderTickets(current);
+  });
+
+  // Groups consecutive weeks (counted from the release start) into periods of n weeks.
+  function periodsOf(weeks, n) {
+    const out = [];
+    for (let i = 0; i < weeks.length; i += n) {
+      const group = weeks.slice(i, i + n);
+      out.push({
+        start: group[0].start,
+        end: P.addDays(group[0].start, n * 7 - 1),
+        complete: group.length === n && group.every((w) => w.complete),
+        ticketsDone: group.reduce((a, w) => a + w.ticketsDone, 0),
+        ticketsCreated: group.reduce((a, w) => a + w.ticketsCreated, 0),
+      });
+    }
+    return out;
+  }
 
   function trendKit(model) {
     const c = palette();
@@ -566,23 +589,32 @@
     setToggle('flow-toggle', mode);
 
     const c = palette();
-    const weeks = model.weeks;
+    const n = settings.flowBucket === 2 ? 2 : 1;
+    const per = n === 2 ? '2 weeks' : 'week';
+    const weeks = periodsOf(model.weeks, n);
     const labels = weeks.map((w) => shortFmt.format(w.start) + (w.complete ? '' : ' (partial)'));
     const opts = baseOptions(c);
     opts.scales.x.grid = { display: false };
     opts.scales.y.ticks.precision = 0;
-    opts.scales.y.title = { display: true, text: 'tickets / week', color: c.muted };
+    opts.scales.y.title = { display: true, text: `tickets / ${per}`, color: c.muted };
+    opts.plugins.tooltip.callbacks = {
+      title: (items) => {
+        if (!items.length) return '';
+        const w = weeks[items[0].dataIndex];
+        return `${shortFmt.format(w.start)} – ${shortFmt.format(w.end)}${w.complete ? '' : ' (in progress)'}`;
+      },
+    };
     let datasets;
 
     if (mode === 'split') {
-      $('tickets-sub').textContent = 'Tickets created vs completed each week. If creation keeps pace with completion, the end date keeps moving.';
+      $('tickets-sub').textContent = `Tickets created vs completed each ${per}. If creation keeps pace with completion, the end date keeps moving.`;
       $('chart-tickets').setAttribute('aria-label', 'Tickets created and completed per week');
       datasets = [
         barDataset('Created', c.s2, weeks.map((w) => w.ticketsCreated)),
         barDataset('Completed', c.s1, weeks.map((w) => w.ticketsDone)),
       ];
     } else {
-      $('tickets-sub').textContent = 'Completed minus created each week. Above zero the backlog shrank; below zero it grew. The line is the running total since the start.';
+      $('tickets-sub').textContent = `Completed minus created each ${per}. Above zero the backlog shrank; below zero it grew. The line is the running total since the start.`;
       $('chart-tickets').setAttribute('aria-label', 'Net tickets completed minus created per week, with running total');
       const net = weeks.map((w) => w.ticketsDone - w.ticketsCreated);
       let run = 0;
@@ -598,12 +630,10 @@
       }];
       opts.scales.y.beginAtZero = true;
       opts.scales.y.grid = { color: (ctx) => (ctx.tick.value === 0 ? c.axis : c.grid) };
-      opts.plugins.tooltip.callbacks = {
-        label: (i) => {
-          const w = weeks[i.dataIndex];
-          if (i.dataset.type === 'line') return `Running total: ${i.raw > 0 ? '+' : ''}${i.raw}`;
-          return `Net: ${i.raw > 0 ? '+' : ''}${i.raw} (${w.ticketsDone} completed − ${w.ticketsCreated} created)`;
-        },
+      opts.plugins.tooltip.callbacks.label = (i) => {
+        const w = weeks[i.dataIndex];
+        if (i.dataset.type === 'line') return `Running total: ${i.raw > 0 ? '+' : ''}${i.raw}`;
+        return `Net: ${i.raw > 0 ? '+' : ''}${i.raw} (${w.ticketsDone} completed − ${w.ticketsCreated} created)`;
       };
     }
     draw('chart-tickets', { data: { labels, datasets }, options: opts });

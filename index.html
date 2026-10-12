@@ -146,6 +146,10 @@
             <div class="title-row">
               <h2>Ticket completion rate</h2>
               <div class="tools">
+                <select id="flow-bucket" class="compact-select" aria-label="Period length">
+                  <option value="1">Per week</option>
+                  <option value="2">Per 2 weeks</option>
+                </select>
                 <div class="segmented" id="flow-toggle" role="group" aria-label="Ticket chart view">
                   <button type="button" data-mode="split" aria-pressed="true">Created vs completed</button>
                   <button type="button" data-mode="net" aria-pressed="false">Net</button>
