@@ -197,7 +197,7 @@ main { padding-bottom: 48px; }
 .card > h2 { margin-bottom: 12px; }
 .card-head { margin-bottom: 12px; }
 .card-head .subtle { font-size: 13px; margin-top: 2px; }
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 0 16px; }
+.grid-2 { align-items: start; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 0 16px; }
 @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } .controls fieldset { grid-column: 1 / -1; } }
 
 .chart-box { position: relative; height: 280px; }
@@ -227,7 +227,7 @@ main { padding-bottom: 48px; }
 .key-swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 8px; }
 .key-swatch.dashed { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; }
 
-.methods summary { cursor: pointer; list-style-position: outside; }
+.methods summary { cursor: pointer; }
 .methods summary h2 { display: inline; }
 .methods dl { margin: 12px 0 0; }
 .methods dt { font-weight: 600; margin-top: 10px; }
@@ -283,3 +283,33 @@ body.printing #remaining-table th { white-space: normal; }
   body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .card, .tile { border-color: #ddd; }
 }
+
+/* ---------------------------------------------------------------- collapsible sections */
+.controls-title { grid-column: 1 / -1; margin: 0; }
+.collapse-toggle {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; text-align: left;
+}
+.collapse-toggle .chev,
+details[data-section] > summary::before {
+  display: inline-block; font-size: 13px; line-height: 1; color: var(--text-secondary);
+  transition: transform 0.15s; width: 14px; text-align: center;
+}
+.collapsed .collapse-toggle .chev,
+details[data-section]:not([open]) > summary::before { transform: rotate(-90deg); }
+/* <details> sections get the same chevron instead of the browser's marker. */
+details[data-section] > summary { list-style: none; display: flex; align-items: center; gap: 6px; }
+details[data-section] > summary::-webkit-details-marker { display: none; }
+details[data-section] > summary::before { content: "▾"; }
+body.printing details[data-section] > summary::before { display: none; }
+.collapse-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* A collapsed card keeps only its title. */
+.card.collapsed > :not(.card-head):not(h2),
+.card.collapsed .card-head > :not(.title-row):not(h2),
+.card.collapsed .title-row .tools,
+.controls.collapsed > :not(.controls-title) { display: none !important; }
+.card.collapsed > h2, .card.collapsed .card-head { margin-bottom: 0; }
+/* The PDF contains exactly the sections that are expanded. */
+body.printing [data-section].collapsed,
+body.printing details[data-section]:not([open]) { display: none !important; }
+body.printing .collapse-toggle .chev { display: none; }

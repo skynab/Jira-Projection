@@ -40,7 +40,8 @@
       </section>
       <div class="file-line subtle" id="file-line"></div>
 
-      <form id="controls" class="controls" onsubmit="return false">
+      <form id="controls" class="controls" data-section="settings" onsubmit="return false">
+        <h2 class="controls-title">Settings</h2>
         <label>Fix version <select id="ctl-version"></select></label>
         <label>Estimate by
           <select id="ctl-unit">
@@ -115,12 +116,12 @@
 
       <section class="tiles" id="tiles"></section>
 
-      <section class="card">
+      <section class="card" data-section="projections">
         <h2>Projected finish dates</h2>
         <div class="table-wrap"><table id="projection-table" class="data-table"></table></div>
       </section>
 
-      <section class="card">
+      <section class="card" data-section="trend">
         <div class="card-head">
           <div class="title-row">
             <h2 id="trend-title">Burn-up with projections</h2>
@@ -146,7 +147,7 @@
       </section>
 
       <div class="grid-2">
-        <section class="card">
+        <section class="card" data-section="velocity">
           <div class="card-head">
             <div class="title-row">
               <h2 id="velocity-title">Velocity per week</h2>
@@ -173,7 +174,7 @@
           </div>
           <div class="chart-box"><canvas id="chart-velocity" role="img" aria-label="Weekly velocity bar chart"></canvas></div>
         </section>
-        <section class="card">
+        <section class="card" data-section="tickets">
           <div class="card-head">
             <div class="title-row">
               <h2>Ticket completion rate</h2>
@@ -203,12 +204,12 @@
         </section>
       </div>
 
-      <details class="card table-toggle">
+      <details class="card table-toggle" data-section="weekly">
         <summary>Weekly numbers behind the charts</summary>
         <div class="table-wrap"><table id="weekly-table" class="data-table"></table></div>
       </details>
 
-      <section class="card">
+      <section class="card" data-section="montecarlo">
         <div class="card-head">
           <details class="export-menu" data-chart="chart-mc">
             <summary class="download" title="Download as PNG">PNG ▾</summary>
@@ -224,7 +225,7 @@
         <div class="chart-box"><canvas id="chart-mc" role="img" aria-label="Cumulative probability of finishing by each date"></canvas></div>
       </section>
 
-      <section class="card">
+      <section class="card" data-section="assignees">
         <div class="card-head">
           <h2>Remaining work by assignee</h2>
           <p class="subtle">Each person's open work divided by what they completed per week in the fit window. If work can't be reassigned, the slowest person sets the release date.</p>
@@ -232,12 +233,12 @@
         <div class="table-wrap"><table id="assignee-table" class="data-table"></table></div>
       </section>
 
-      <section class="card">
+      <section class="card" data-section="remaining">
         <h2>Remaining tickets</h2>
         <div class="table-wrap"><table id="remaining-table" class="data-table"></table></div>
       </section>
 
-      <details class="card methods">
+      <details class="card methods" data-section="methods">
         <summary><h2>How each projection works</h2></summary>
         <dl>
           <dt>Burn-up or burn-down</dt>

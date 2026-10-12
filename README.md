@@ -42,7 +42,8 @@ Monte Carlo options:
 
 Other features:
 - **Backtesting**: set "As of" to a past date to see what the app would have predicted then. Tickets created later are ignored, and tickets resolved later count as open.
-- **Export PDF** opens the print dialog with a print-ready version of the report; choose "Save as PDF". The PDF is always light-themed, hides the controls and starts with a header listing the version, dates and every setting used. Charts are full width and the weekly table and methods are included.
+- **Export PDF** opens the print dialog with a print-ready version of the report; choose "Save as PDF". The PDF is always light-themed, hides the controls and starts with a header listing the version, dates and every setting used. Charts are full width. The PDF contains exactly the sections that are expanded on the page.
+- **Collapsible sections**: every titled section (settings, projections, each chart, the tables and the methods) collapses from its title. The weekly table and methods start collapsed; your choices are remembered in this browser.
 - **Copy summary** puts a Slack-ready text summary on the clipboard. **PNG** menus download each chart with a light, dark or transparent background, at 2× resolution. Light and dark use that theme's colours regardless of how the page is currently shown; transparent keeps the current theme's colours.
 - **Try sample data** loads a made-up release, so you can demo the page without a real export.
 - Modelling preferences (fit window, smoothing, Monte Carlo options and so on) are remembered in your browser.
