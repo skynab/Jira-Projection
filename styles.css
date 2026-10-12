@@ -184,7 +184,10 @@ main { padding-bottom: 48px; }
 .headline .big { font-size: 30px; font-weight: 600; line-height: 1.2; }
 .headline .range { color: var(--text-secondary); margin-top: 4px; }
 
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+.tiles-section { margin: 16px 0; }
+.tiles-section > h2 { margin-bottom: 10px; }
+.tiles-section.collapsed > h2 { margin-bottom: 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
 .tile .label { font-size: 12.5px; color: var(--text-secondary); }
 .tile .value { font-size: 22px; font-weight: 600; }
@@ -261,6 +264,7 @@ body.printing .headline .big { font-size: 24px; }
 body.printing .card,
 body.printing .tile { box-shadow: none; }
 body.printing .card:has(.chart-box),
+body.printing .tiles-section,
 body.printing .tile,
 body.printing .headline-row,
 body.printing #print-header { break-inside: avoid; }
@@ -314,7 +318,8 @@ body.printing details[data-section] > summary::before { display: none; }
 .card.collapsed > :not(.card-head):not(h2),
 .card.collapsed .card-head > :not(.title-row):not(h2),
 .card.collapsed .title-row .tools,
-.controls.collapsed > :not(.controls-title) { display: none !important; }
+.controls.collapsed > :not(.controls-title),
+.tiles-section.collapsed > :not(h2) { display: none !important; }
 .card.collapsed > h2, .card.collapsed .card-head { margin-bottom: 0; }
 /* The PDF contains exactly the sections that are expanded. */
 body.printing [data-section].collapsed,
