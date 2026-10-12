@@ -44,6 +44,30 @@ assert.strictEqual(m.totals.completed, 12);
 assert.strictEqual(m.totals.remaining, 8);
 assert.strictEqual(m.weeks[0].velocity, 10);
 assert(m.projections.velocity.day > m.T);
+// Backtest: as of Fri 9 Jan only T-0..T-4 were resolved; T-5 (resolved 12 Jan) is still open.
+const back = P.buildModel(data, { asOf: new Date(2026, 0, 9).getTime() });
+assert.strictEqual(back.totals.completed, 10);
+assert.strictEqual(back.totals.remaining, 10);
+assert.strictEqual(back.totals.ticketsOpen, 5);
+
+// Monte Carlo: deterministic (seeded) and scope growth can only push dates later.
+const mcA = P.buildModel(data, { asOf: new Date(2026, 0, 19).getTime() }).projections.monteCarlo;
+const mcB = P.buildModel(data, { asOf: new Date(2026, 0, 19).getTime() }).projections.monteCarlo;
+assert.strictEqual(mcA.p85, mcB.p85);
+assert(mcA.p50 <= mcA.p85 && mcA.p85 <= mcA.p95);
+
+// Assignee projection exists for each person with open work.
+assert(m.projections.assignees.length >= 1);
+
+// Edge cases: everything done, and nothing done yet.
+const allDone = P.parseIssues('Issue key,Status,Resolution,Created,Resolved,Custom field (Story Points)\n' +
+  'A-1,Done,Done,01/Jan/26 9:00 AM,05/Jan/26 9:00 AM,3\n');
+assert.strictEqual(P.buildModel(allDone, {}).finished, true);
+const noneDone = P.parseIssues('Issue key,Status,Resolution,Created,Updated,Custom field (Story Points)\n' +
+  'A-1,To Do,,01/Jan/26 9:00 AM,20/Jan/26 9:00 AM,3\n');
+const nd = P.buildModel(noneDone, {});
+assert.strictEqual(nd.totals.remaining, 3);
+assert.strictEqual(nd.projections.monteCarlo, null);
 console.log('unit tests passed');
 
 // Smoke-test real exports passed on the command line.

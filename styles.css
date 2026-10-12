@@ -79,6 +79,17 @@ code { font-size: 12.5px; background: var(--border); padding: 1px 4px; border-ra
 }
 main { padding-bottom: 48px; }
 
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.ghost-button, .download {
+  font: inherit; color: var(--text-primary); background: var(--surface); cursor: pointer;
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px;
+}
+.ghost-button:hover, .download:hover { border-color: var(--axis); }
+.download { float: right; font-size: 12px; padding: 3px 8px; color: var(--text-secondary); margin-left: 8px; }
+.headline-row { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.headline-actions { margin-top: 24px; display: flex; gap: 8px; align-items: center; }
+.table-toggle summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+.table-toggle .table-wrap { margin-top: 12px; }
 .file-button input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .file-button span {
   display: inline-block; padding: 8px 14px; border-radius: 8px; cursor: pointer;
@@ -98,7 +109,7 @@ main { padding-bottom: 48px; }
 .file-line { margin-bottom: 12px; }
 
 .controls {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 16px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); gap: 12px 16px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
 }
 .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-secondary); }
@@ -139,7 +150,7 @@ main { padding-bottom: 48px; }
 .card > h2 { margin-bottom: 12px; }
 .card-head { margin-bottom: 12px; }
 .card-head .subtle { font-size: 13px; margin-top: 2px; }
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 0 16px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 0 16px; }
 @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } .controls fieldset { grid-column: 1 / -1; } }
 
 .chart-box { position: relative; height: 280px; }

@@ -32,7 +32,18 @@ Columns the app reads: `Issue key`, `Issue Type`, `Summary`, `Status`, `Status c
 - **Velocity per week** with a rolling average.
 - **Ticket completion rate**: tickets created vs completed per week.
 - **Chance of finishing by date** from the Monte Carlo simulation.
-- **Remaining tickets** table.
+- **Remaining work by assignee**: each person's open work divided by their own recent throughput. The slowest person is reported as the assignee bottleneck.
+- **Remaining tickets** table, plus a collapsible table of the weekly numbers behind the charts.
+
+Monte Carlo options:
+- **Randomise ticket sizes** (on by default): each open ticket's size is drawn from its optimistic, estimated or pessimistic size.
+- **Keep adding scope** (off by default): each replayed week also adds the scope that was added in that historical week. Turn it on when tickets keep landing in the version.
+
+Other features:
+- **Backtesting**: set "As of" to a past date to see what the app would have predicted then. Tickets created later are ignored, and tickets resolved later count as open.
+- **Copy summary** puts a Slack-ready text summary on the clipboard. **PNG** buttons download each chart.
+- **Try sample data** loads a made-up release, so you can demo the page without a real export.
+- Modelling preferences (fit window, smoothing, Monte Carlo options and so on) are remembered in your browser.
 
 Min/max bounds use the Fibonacci scale for story points: each remaining ticket moves one step down (5 → 3) for the optimistic bound and one step up (5 → 8) for the pessimistic bound. These are combined with the fastest and slowest rolling-average velocity. For Original estimate, a ± percentage is used instead.
 

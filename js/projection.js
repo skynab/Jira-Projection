@@ -333,6 +333,8 @@
     rollWeeks: 2,
     daysUncertainty: 0.3,
     mcRuns: 5000,
+    mcUncertainty: true,      // Monte Carlo: randomise each open ticket within its min/max bound
+    mcScopeGrowth: false,     // Monte Carlo: replay each sampled week's scope additions too
   };
 
   function buildModel(data, userSettings) {
@@ -370,8 +372,9 @@
       const isDelivered = resolved && delivered.has((label || '').toLowerCase());
       const done = resolved ? doneTimestamp(it) : null;
       if (isDelivered && done.approx) approxDone++;
+      const assignee = it.assignee || 'Unassigned';
       return {
-        it, est, missing, resolved, delivered: isDelivered,
+        it, est, missing, resolved, delivered: isDelivered, assignee,
         discarded: resolved && !isDelivered,
         doneAt: done ? done.at : null,
       };
@@ -385,13 +388,21 @@
         'Use the "All fields" export (or add the Resolved column) for accurate completion dates.');
     }
 
-    const scopeRows = rows.filter((r) => !r.discarded);
-    const doneRows = rows.filter((r) => r.delivered);
-    const openRows = rows.filter((r) => !r.resolved);
-    const discardedRows = rows.filter((r) => r.discarded);
+    // Everything is evaluated "as of" a date, so moving it into the past gives an honest
+    // backtest: tickets created later are ignored and tickets resolved later are still open.
+    const asOf = dayStart(s.asOf || data.latestDate);
+    const asOfEnd = addDays(asOf, 1) - 1;
+    const visible = rows.filter((r) => r.it.created <= asOfEnd);
+    for (const r of visible) {
+      if (r.resolved && r.doneAt > asOfEnd) { r.resolved = r.delivered = r.discarded = false; r.resolvedLater = true; }
+    }
+    const scopeRows = visible.filter((r) => !r.discarded);
+    const doneRows = visible.filter((r) => r.delivered);
+    const openRows = visible.filter((r) => !r.resolved);
+    const discardedRows = visible.filter((r) => r.discarded);
+    if (!scopeRows.length) return { empty: true, warnings: ['No tickets existed by the as-of date.'], settings: s };
 
     // --- timeline
-    const asOf = dayStart(s.asOf || data.latestDate);
     const firstDone = doneRows.length ? Math.min(...doneRows.map((r) => r.doneAt)) : null;
     const start = mondayOf(s.start || firstDone || Math.min(...items.map((r) => r.created)));
     const T = dayDiff(asOf, start);
@@ -422,8 +433,9 @@
     const total = scopeCum[T];
     const completed = doneCum[T];
     const remaining = Math.max(0, openRows.reduce((a, r) => a + r.est, 0));
-    const remainingLow = openRows.reduce((a, r) => a + boundEstimate(r.est, -1), 0);
-    const remainingHigh = openRows.reduce((a, r) => a + boundEstimate(r.est, 1), 0);
+    for (const r of openRows) { r.low = boundEstimate(r.est, -1); r.high = boundEstimate(r.est, 1); }
+    const remainingLow = openRows.reduce((a, r) => a + r.low, 0);
+    const remainingHigh = openRows.reduce((a, r) => a + r.high, 0);
     function boundEstimate(e, dir) {
       if (s.unit === 'points') return dir < 0 ? fibDown(e) : fibUp(e);
       if (s.unit === 'days') return e * (1 + dir * s.daysUncertainty);
@@ -443,6 +455,7 @@
         velocity: doneCum[b] - (a === 0 ? baseDone : doneCum[a - 1]),
         ticketsDone: doneNCum[b] - (a === 0 ? baseDoneN : doneNCum[a - 1]),
         ticketsCreated: createdPerDay.slice(a, b + 1).reduce((x, y) => x + y, 0),
+        scopeAdded: scopeCum[b] - (a === 0 ? baseScope : scopeCum[a - 1]),
       });
     }
     const completeWeeks = weeks.filter((w) => w.complete);
@@ -504,16 +517,33 @@
       const avgTickets = mean(ticketVel);
       proj.tickets = { day: days(ticketsLeft, avgTickets), perWeek: avgTickets, left: ticketsLeft };
 
-      proj.monteCarlo = monteCarlo(vel, remaining, T, s.mcRuns);
+      proj.monteCarlo = monteCarlo({
+        weeks: windowWeeks, openRows, T, runs: s.mcRuns,
+        uncertainty: s.mcUncertainty && s.unit !== 'count', scopeGrowth: s.mcScopeGrowth,
+      });
+      proj.assignees = assigneeProjections(visible, openRows, windowWeeks, start, T);
+      const blocking = proj.assignees.filter((a) => a.remaining > 0 && a.day != null && a.name !== 'Unassigned');
+      const worst = blocking.reduce((m, a) => (m == null || a.day > m.day ? a : m), null);
+      const stuck = proj.assignees.filter((a) => a.remaining > 0 && a.day == null).map((a) => a.name);
+      proj.bottleneck = {
+        day: worst ? worst.day : null,
+        name: worst ? worst.name : null,
+        note: stuck.length ? `Not projectable (no recent throughput): ${stuck.join(', ')}` : null,
+      };
     }
 
     // --- chart horizon
     const candidates = [T + 28];
-    for (const k of ['linear', 'poly', 'scopeGrowth', 'velocity', 'optimistic', 'pessimistic']) {
+    for (const k of ['linear', 'poly', 'velocity', 'optimistic', 'pessimistic']) {
       if (proj[k] && proj[k].day != null) candidates.push(proj[k].day + 7);
     }
-    if (proj.monteCarlo) candidates.push(proj.monteCarlo.p95 + 7);
-    const horizon = Math.ceil(Math.min(T + MAX_HORIZON_DAYS, Math.max(...candidates)));
+    if (proj.monteCarlo && isFinite(proj.monteCarlo.p95)) candidates.push(proj.monteCarlo.p95 + 7);
+    let horizon = Math.max(...candidates);
+    // A far-off scope-growth crossing would squash the rest of the chart; its line just runs off the edge instead.
+    if (proj.scopeGrowth && proj.scopeGrowth.day != null && proj.scopeGrowth.day - T <= 1.5 * (horizon - T)) {
+      horizon = Math.max(horizon, proj.scopeGrowth.day + 7);
+    }
+    horizon = Math.ceil(Math.min(T + MAX_HORIZON_DAYS, horizon));
 
     return {
       settings: s,
@@ -536,23 +566,62 @@
     };
   }
 
-  // Resample historical weekly velocity until the remaining work is burned down.
-  function monteCarlo(velocities, remaining, T, runs) {
-    if (!velocities.length || !velocities.some((v) => v > 0)) return null;
+  // Per-assignee remaining work divided by that person's own weekly throughput in the
+  // fit window. The slowest person bounds the release if work cannot be reassigned.
+  function assigneeProjections(rows, openRows, windowWeeks, start, T) {
+    const nWeeks = windowWeeks.length;
+    const from = nWeeks ? dayDiff(windowWeeks[0].start, start) : 0;
+    const to = nWeeks ? dayDiff(windowWeeks[nWeeks - 1].start, start) + 6 : -1;
+    const by = new Map();
+    const get = (name) => {
+      if (!by.has(name)) by.set(name, { name, remaining: 0, open: 0, delivered: 0 });
+      return by.get(name);
+    };
+    for (const r of openRows) { const a = get(r.assignee); a.remaining += r.est; a.open++; }
+    for (const r of rows) {
+      if (!r.delivered) continue;
+      const d = dayDiff(r.doneAt, start);
+      if (d >= from && d <= to) get(r.assignee).delivered += r.est;
+    }
+    return [...by.values()].map((a) => {
+      a.perWeek = nWeeks ? a.delivered / nWeeks : 0;
+      a.day = a.remaining <= 0 ? T : a.perWeek > 0 ? T + (a.remaining / a.perWeek) * 7 : null;
+      a.note = a.remaining > 0 && a.perWeek <= 0 ? 'No completed work in the fit window' : null;
+      return a;
+    }).sort((x, y) => (y.day ?? Infinity) - (x.day ?? Infinity) || y.remaining - x.remaining);
+  }
+
+  // Resample historical weeks until the remaining work is burned down. Optionally
+  // each open ticket's size is drawn from its min/nominal/max estimate, and each
+  // sampled week also adds the scope that was added in that historical week.
+  function monteCarlo({ weeks, openRows, T, runs, uncertainty, scopeGrowth }) {
+    if (!weeks.length || !weeks.some((w) => w.velocity > 0)) return null;
     const rnd = mulberry32(42);
+    const MAX_WEEKS = 260;
     const out = [];
+    let unfinished = 0;
     for (let i = 0; i < runs; i++) {
-      let rem = remaining;
-      let w = 0;
-      while (rem > 0 && w < 520) {
-        const v = velocities[Math.floor(rnd() * velocities.length)];
-        if (v >= rem) { w += rem / v; rem = 0; } else { rem -= v; w++; }
+      let rem = 0;
+      for (const r of openRows) {
+        if (!uncertainty) { rem += r.est; continue; }
+        const x = rnd();
+        rem += x < 0.25 ? r.low : x < 0.75 ? r.est : r.high;
       }
-      out.push(T + w * 7);
+      let w = 0;
+      while (rem > 0 && w < MAX_WEEKS) {
+        const wk = weeks[Math.floor(rnd() * weeks.length)];
+        const v = wk.velocity;
+        if (v >= rem) { w += rem / v; rem = 0; break; }
+        rem -= v;
+        if (scopeGrowth) rem += Math.max(0, wk.scopeAdded);
+        w++;
+      }
+      if (rem > 0) { unfinished++; out.push(Infinity); } else out.push(T + w * 7);
     }
     out.sort((a, b) => a - b);
     return {
       samples: out,
+      unfinishedShare: unfinished / runs,
       p50: percentile(out, 0.5),
       p85: percentile(out, 0.85),
       p95: percentile(out, 0.95),

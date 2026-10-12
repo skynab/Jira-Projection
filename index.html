@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="js/projection.js"></script>
+  <script src="js/sample.js"></script>
 </head>
 <body>
   <header class="page-header">
@@ -14,10 +15,13 @@
       <h1>Release projection</h1>
       <p class="subtle">Load a Jira CSV export of one fix version to see when it is likely to finish. Everything runs in your browser; the file is never uploaded.</p>
     </div>
-    <label class="file-button">
-      <input id="file-input" type="file" accept=".csv,text/csv">
-      <span>Choose CSV…</span>
-    </label>
+    <div class="header-actions">
+      <button type="button" id="sample-button" class="ghost-button">Try sample data</button>
+      <label class="file-button">
+        <input id="file-input" type="file" accept=".csv,text/csv">
+        <span>Choose CSV…</span>
+      </label>
+    </div>
   </header>
 
   <main>
@@ -80,6 +84,13 @@
           <div id="ctl-types" class="checks"></div>
         </fieldset>
         <fieldset>
+          <legend>Monte Carlo</legend>
+          <div class="checks">
+            <label><input type="checkbox" id="ctl-mc-unc" checked>Randomise ticket sizes within min/max</label>
+            <label><input type="checkbox" id="ctl-mc-scope">Keep adding scope at the historical rate</label>
+          </div>
+        </fieldset>
+        <fieldset>
           <legend>Resolutions that count as completed work</legend>
           <div id="ctl-resolutions" class="checks"></div>
           <p class="hint">Unchecked resolutions (e.g. “No Action”) are removed from scope.</p>
@@ -88,7 +99,13 @@
 
       <ul id="warnings" class="warnings"></ul>
 
-      <section class="headline" id="headline"></section>
+      <section class="headline-row">
+        <div class="headline" id="headline"></div>
+        <div class="headline-actions">
+          <button type="button" id="copy-summary" class="ghost-button">Copy summary</button>
+          <span id="copy-status" class="subtle" role="status"></span>
+        </div>
+      </section>
 
       <section class="tiles" id="tiles"></section>
 
@@ -99,6 +116,7 @@
 
       <section class="card">
         <div class="card-head">
+          <button type="button" class="download" data-chart="chart-burnup" title="Download as PNG">PNG</button>
           <h2>Burn-up with projections</h2>
           <p class="subtle" id="burnup-sub"></p>
         </div>
@@ -108,6 +126,7 @@
       <div class="grid-2">
         <section class="card">
           <div class="card-head">
+            <button type="button" class="download" data-chart="chart-velocity" title="Download as PNG">PNG</button>
             <h2>Velocity per week</h2>
             <p class="subtle" id="velocity-sub"></p>
           </div>
@@ -115,6 +134,7 @@
         </section>
         <section class="card">
           <div class="card-head">
+            <button type="button" class="download" data-chart="chart-tickets" title="Download as PNG">PNG</button>
             <h2>Ticket completion rate</h2>
             <p class="subtle">Tickets created vs completed each week. If creation keeps pace with completion, the end date keeps moving.</p>
           </div>
@@ -122,12 +142,26 @@
         </section>
       </div>
 
+      <details class="card table-toggle">
+        <summary>Weekly numbers behind the charts</summary>
+        <div class="table-wrap"><table id="weekly-table" class="data-table"></table></div>
+      </details>
+
       <section class="card">
         <div class="card-head">
+          <button type="button" class="download" data-chart="chart-mc" title="Download as PNG">PNG</button>
           <h2>Chance of finishing by date</h2>
-          <p class="subtle">Monte Carlo: replays randomly chosen past weeks until the remaining work is done, 5,000 times.</p>
+          <p class="subtle" id="mc-sub"></p>
         </div>
         <div class="chart-box"><canvas id="chart-mc" role="img" aria-label="Cumulative probability of finishing by each date"></canvas></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Remaining work by assignee</h2>
+          <p class="subtle">Each person's open work divided by what they completed per week in the fit window. If work can't be reassigned, the slowest person sets the release date.</p>
+        </div>
+        <div class="table-wrap"><table id="assignee-table" class="data-table"></table></div>
       </section>
 
       <section class="card">
@@ -151,7 +185,13 @@
           <dt>Ticket rate</dt>
           <dd>Open tickets ÷ the mean number of tickets completed per week. This ignores estimates entirely, which makes it a useful cross-check.</dd>
           <dt>Monte Carlo</dt>
-          <dd>Picks random past full weeks (with replacement) and plays them forward until remaining work hits zero, 5,000 times. P50 means half of the simulated futures finished by that date; P85 is a common commitment date.</dd>
+          <dd>Picks random past full weeks (with replacement) and plays them forward until remaining work hits zero, 5,000 times. P50 means half of the simulated futures finished by that date; P85 is a common commitment date.
+            With “Randomise ticket sizes”, each open ticket's size is drawn from its optimistic, estimated or pessimistic size (25% / 50% / 25%) in every run.
+            With “Keep adding scope”, each replayed week also adds the scope that was added in that same historical week.</dd>
+          <dt>Assignee bottleneck</dt>
+          <dd>The latest per-person finish date, assuming nobody picks up anyone else's tickets. Unassigned tickets are listed but not projected.</dd>
+          <dt>Backtesting</dt>
+          <dd>Set “As of” to a past date to see what the app would have predicted then. Tickets created after that date are ignored, and tickets resolved after it count as still open. Compare the result with what actually happened.</dd>
           <dt>Caveats</dt>
           <dd>In-progress tickets count as fully remaining. Tickets created before the release start count as initial scope. Weekly figures use calendar weeks starting on Monday, so holidays and time off show up as slow weeks.</dd>
         </dl>
