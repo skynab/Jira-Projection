@@ -43,6 +43,10 @@ assert.strictEqual(m.totals.scope, 20);
 assert.strictEqual(m.totals.completed, 12);
 assert.strictEqual(m.totals.remaining, 8);
 assert.strictEqual(m.weeks[0].velocity, 10);
+// Per-type velocity adds up to the total for every week.
+for (const w of m.weeks) {
+  assert.strictEqual(Object.values(w.velocityByType).reduce((a, b) => a + b, 0), w.velocity);
+}
 assert(m.projections.velocity.day > m.T);
 // Linear projection starts from actual completed work and uses the fitted slope.
 assert(Math.abs(m.projections.linear.day - (m.T + m.totals.remaining / m.fits.linear.slope)) < 1e-9);

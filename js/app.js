@@ -8,6 +8,7 @@
   let fileName = '';
   let chartMode = null; // 'up' | 'down' once the user picks one; null = follow the recommendation
   let flowMode = null;  // 'split' | 'net' likewise for the ticket chart
+  let typeOrder = [];
   const settings = {};
   const charts = {};
 
@@ -39,7 +40,7 @@
   // Modelling preferences (not file-specific filters) survive reloads in this browser.
 
   const STORE_KEY = 'jira-projection:settings';
-  const PERSIST = ['hoursPerDay', 'daysUncertainty', 'fillMissing', 'fitWeeks', 'polyDegree', 'rollWeeks', 'mcUncertainty', 'mcScopeGrowth', 'flowBucket'];
+  const PERSIST = ['hoursPerDay', 'daysUncertainty', 'fillMissing', 'fitWeeks', 'polyDegree', 'rollWeeks', 'mcUncertainty', 'mcScopeGrowth', 'flowBucket', 'velBucket', 'velView'];
   function loadPrefs() {
     try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
   }
@@ -120,7 +121,13 @@
     const prefs = loadPrefs();
     for (const k of PERSIST) settings[k] = k in prefs ? prefs[k] : d[k];
     if (settings.flowBucket !== 2) settings.flowBucket = 1;
+    if (settings.velBucket !== 2) settings.velBucket = 1;
+    if (settings.velView !== 'type') settings.velView = 'total';
     $('flow-bucket').value = String(settings.flowBucket);
+    $('vel-bucket').value = String(settings.velBucket);
+    // Issue-type colours follow the type (ordered by how common it is in the whole file),
+    // so filtering never repaints the remaining types.
+    typeOrder = data.types.map((t) => t.name);
     $('ctl-hpd').value = settings.hoursPerDay;
     $('ctl-unc').value = Math.round(settings.daysUncertainty * 100);
     $('ctl-fill').value = settings.fillMissing;
@@ -417,6 +424,12 @@
   }
   onToggle('trend-toggle', (mode) => { chartMode = mode; renderTrend(current); });
   onToggle('flow-toggle', (mode) => { flowMode = mode; renderTickets(current); });
+  onToggle('vel-toggle', (mode) => { settings.velView = mode; savePrefs(); renderVelocity(current); });
+  $('vel-bucket').addEventListener('change', (e) => {
+    settings.velBucket = +e.target.value;
+    savePrefs();
+    if (current && !current.empty) renderVelocity(current);
+  });
   $('flow-bucket').addEventListener('change', (e) => {
     settings.flowBucket = +e.target.value;
     savePrefs();
@@ -434,6 +447,11 @@
         complete: group.length === n && group.every((w) => w.complete),
         ticketsDone: group.reduce((a, w) => a + w.ticketsDone, 0),
         ticketsCreated: group.reduce((a, w) => a + w.ticketsCreated, 0),
+        velocity: group.reduce((a, w) => a + w.velocity, 0),
+        velocityByType: group.reduce((acc, w) => {
+          for (const [k, v] of Object.entries(w.velocityByType)) acc[k] = (acc[k] || 0) + v;
+          return acc;
+        }, {}),
       });
     }
     return out;
@@ -565,24 +583,74 @@
     return Object.assign({ type: 'bar', label, data, backgroundColor: color, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.7, barPercentage: 0.9 }, extra);
   }
 
+  const TYPE_SLOTS = 8;
+
   function renderVelocity(model) {
     const c = palette();
     const u = unitShort(model.unit);
-    const labels = model.weeks.map((w) => shortFmt.format(w.start) + (w.complete ? '' : ' (partial)'));
-    const rollingByWeek = model.weeks.map((w, i) => (w.complete ? model.rolling[i] : null));
-    const datasets = [
-      barDataset('Completed per week', model.weeks.map((w) => (w.complete ? c.s1 : alpha(c.s1, 0.4))), model.weeks.map((w) => w.velocity)),
-    ];
-    if (model.settings.rollWeeks > 1) {
-      datasets.push({ type: 'line', label: `${model.settings.rollWeeks}-week rolling average`, data: rollingByWeek, borderColor: c.s2, backgroundColor: c.s2, borderWidth: 2, pointRadius: 4, pointBorderColor: c.surface, pointBorderWidth: 2, spanGaps: true });
-    }
-    datasets.push({ type: 'line', label: 'Average (fit window)', data: model.weeks.map(() => model.totals.avgVelocity), borderColor: c.muted, borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0 });
+    const n = settings.velBucket === 2 ? 2 : 1;
+    const per = n === 2 ? '2 weeks' : 'week';
+    const view = settings.velView === 'type' ? 'type' : 'total';
+    setToggle('vel-toggle', view);
+    const periods = periodsOf(model.weeks, n);
+    const labels = periods.map((w) => shortFmt.format(w.start) + (w.complete ? '' : ' (partial)'));
+    const fade = (color, w) => (w.complete ? color : alpha(color, 0.4));
+    const avgLine = {
+      type: 'line', label: 'Average (fit window)', data: periods.map(() => model.totals.avgVelocity * n),
+      borderColor: c.muted, borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, stack: 'reference',
+    };
     const opts = baseOptions(c);
     opts.scales.x.grid = { display: false };
-    opts.scales.y.title = { display: true, text: `${u} / week`, color: c.muted };
-    opts.plugins.tooltip.callbacks = { label: (i) => `${i.dataset.label}: ${fmtNum(i.raw)} ${u}` };
+    opts.scales.y.title = { display: true, text: `${u} / ${per}`, color: c.muted };
+    opts.plugins.tooltip.callbacks = {
+      title: (items) => {
+        if (!items.length) return '';
+        const w = periods[items[0].dataIndex];
+        return n === 1 ? `Week of ${shortFmt.format(w.start)}${w.complete ? '' : ' (in progress)'}`
+          : `${shortFmt.format(w.start)} – ${shortFmt.format(w.end)}${w.complete ? '' : ' (in progress)'}`;
+      },
+      label: (i) => `${i.dataset.label}: ${fmtNum(i.raw)} ${u}`,
+    };
+    let datasets;
+
+    if (view === 'total') {
+      // Rolling average over complete periods, spanning the smoothing setting's number of weeks.
+      const k = Math.max(1, Math.round(model.settings.rollWeeks / n));
+      const done = periods.filter((w) => w.complete).map((w) => w.velocity);
+      const rolling = periods.map((w, i) => (w.complete && i >= k - 1 ? done.slice(i - k + 1, i + 1).reduce((a, b) => a + b, 0) / k : null));
+      datasets = [barDataset(`Completed per ${per}`, periods.map((w) => fade(c.s1, w)), periods.map((w) => w.velocity))];
+      if (k > 1) {
+        datasets.push({ type: 'line', label: `${k * n}-week rolling average`, data: rolling, borderColor: c.s2, backgroundColor: c.s2, borderWidth: 2, pointRadius: 4, pointBorderColor: c.surface, pointBorderWidth: 2, spanGaps: true });
+      }
+      datasets.push(avgLine);
+      $('velocity-sub').textContent = `${u === 'tickets' ? 'Tickets' : 'Estimated ' + u} completed in each ${n === 1 ? 'calendar week (Mon–Sun)' : 'two-week period from the release start'}. A faded bar is a period still in progress.`;
+      $('chart-velocity').setAttribute('aria-label', `Velocity per ${per} bar chart`);
+    } else {
+      const slots = ['--series-1', '--series-2', '--series-3', '--series-4', '--series-5', '--series-6', '--series-7', '--series-8'].map(css);
+      const present = new Set(periods.flatMap((w) => Object.keys(w.velocityByType)));
+      // Keep the file-wide order; anything past the palette folds into "Other".
+      const ordered = typeOrder.filter((t) => present.has(t));
+      const shown = ordered.length > TYPE_SLOTS ? ordered.slice(0, TYPE_SLOTS - 1) : ordered;
+      const rest = ordered.filter((t) => !shown.includes(t));
+      const series = shown.map((t) => ({ label: t, color: slots[typeOrder.indexOf(t) % TYPE_SLOTS], value: (w) => w.velocityByType[t] || 0 }));
+      if (rest.length) series.push({ label: 'Other', color: c.muted, value: (w) => rest.reduce((a, t) => a + (w.velocityByType[t] || 0), 0) });
+      datasets = series.map((sr) => barDataset(sr.label, periods.map((w) => fade(sr.color, w)), periods.map(sr.value), {
+        stack: 'work', borderRadius: 0, borderSkipped: false,
+        borderColor: c.surface, borderWidth: { top: 2, bottom: 0, left: 0, right: 0 }, // 2px surface gap between segments
+      }));
+      datasets.push(avgLine);
+      opts.scales.x.stacked = true;
+      opts.scales.y.stacked = true;
+      opts.plugins.tooltip.callbacks.footer = (items) => {
+        if (!items.length) return '';
+        return `Total: ${fmtNum(periods[items[0].dataIndex].velocity)} ${u}`;
+      };
+      opts.plugins.tooltip.filter = (i) => i.raw != null && i.dataset.type !== 'line' && i.raw !== 0;
+      $('velocity-sub').textContent = `${u === 'tickets' ? 'Tickets' : 'Estimated ' + u} completed per ${per}, split by issue type. The dashed line is the average total.`;
+      $('chart-velocity').setAttribute('aria-label', `Velocity per ${per} stacked by issue type`);
+    }
+    $('velocity-title').textContent = `Velocity per ${per}`;
     draw('chart-velocity', { data: { labels, datasets }, options: opts });
-    $('velocity-sub').textContent = `${u === 'tickets' ? 'Tickets' : 'Estimated ' + u} completed in each calendar week (Mon–Sun). The faded bar is the current, unfinished week.`;
   }
 
   function renderTickets(model) {

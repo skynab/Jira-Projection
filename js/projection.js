@@ -422,10 +422,15 @@
       if (d < 0) { baseScope += r.est; baseScopeN++; }
       else if (d <= T) { scope[d] += r.est; scopeN[d]++; createdPerDay[d]++; }
     }
+    const doneByType = new Map(); // issue type -> work completed per day
     for (const r of doneRows) {
       const d = dayDiff(r.doneAt, start);
       if (d < 0) { baseDone += r.est; baseDoneN++; }
-      else if (d <= T) { done[d] += r.est; doneN[d]++; }
+      else if (d <= T) {
+        done[d] += r.est; doneN[d]++;
+        if (!doneByType.has(r.it.type)) doneByType.set(r.it.type, new Array(T + 1).fill(0));
+        doneByType.get(r.it.type)[d] += r.est;
+      }
     }
     const cumulate = (arr, base) => { let acc = base; return arr.map((v) => (acc += v)); };
     const scopeCum = cumulate(scope, baseScope);
@@ -473,6 +478,8 @@
         ticketsDone: doneNCum[b] - (a === 0 ? baseDoneN : doneNCum[a - 1]),
         ticketsCreated: createdPerDay.slice(a, b + 1).reduce((x, y) => x + y, 0),
         scopeAdded: scopeCum[b] - (a === 0 ? baseScope : scopeCum[a - 1]),
+        velocityByType: Object.fromEntries([...doneByType].map(([type, perDay]) =>
+          [type, perDay.slice(a, b + 1).reduce((x, y) => x + y, 0)])),
       });
     }
     const completeWeeks = weeks.filter((w) => w.complete);

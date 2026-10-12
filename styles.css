@@ -13,6 +13,10 @@
   --series-2: #eb6834; /* linear */
   --series-3: #1baf7a; /* polynomial */
   --series-4: #eda100; /* bounds */
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
   --scope: #52514e;
   --negative: #e34948; /* diverging pole opposite --series-1 */
   --warning-bg: #fff6e0;
@@ -35,6 +39,10 @@
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
     --scope: #c3c2b7;
     --negative: #e66767;
     --warning-bg: #2e2510;
@@ -56,6 +64,10 @@
   --series-2: #d95926;
   --series-3: #199e70;
   --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
   --scope: #c3c2b7;
   --negative: #e66767;
   --warning-bg: #2e2510;

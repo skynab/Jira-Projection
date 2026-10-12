@@ -30,7 +30,7 @@ Columns the app reads: `Issue key`, `Issue Type`, `Summary`, `Status`, `Status c
 - **Burn-up or burn-down**, with linear and polynomial regression projections, a scope-growth trend and an optimistic/pessimistic cone. The page picks the chart for each file: if more than 15% of the final scope was added or removed after the release started, it shows the burn-up (scope changes stay visible); otherwise the burn-down. A toggle switches between them, and on the burn-down, triangles mark days when work was added.
   Regressions are fitted to history but projected forward from the actual numbers on the as-of date, so both charts and the projections table agree.
 - **Projected finish dates** from linear regression, linear regression with scope growth, polynomial regression (degree 2 or 3), average velocity, min/max bounds, ticket completion rate, and Monte Carlo P50/P85/P95.
-- **Velocity per week** with a rolling average.
+- **Velocity**, either as a total with a rolling average or stacked by issue type (for example Bug vs Feature) to show where capacity goes. It can be grouped per week or per 2 weeks.
 - **Ticket completion rate**, with two views: created vs completed per week, or net (completed − created) per week with a running total. Either view can be grouped per week or per 2 weeks (counted from the release start). Positive weeks mean the backlog shrank. The net view is picked automatically when at least 15% of tickets were created after the release started.
 - **Chance of finishing by date** from the Monte Carlo simulation.
 - **Remaining work by assignee**: each person's open work divided by their own recent throughput. The slowest person is reported as the assignee bottleneck.

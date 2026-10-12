@@ -142,15 +142,27 @@
       <div class="grid-2">
         <section class="card">
           <div class="card-head">
-            <details class="export-menu" data-chart="chart-velocity">
-              <summary class="download" title="Download as PNG">PNG ▾</summary>
-              <div class="menu" role="menu">
-                <button type="button" role="menuitem" data-bg="light">Light background</button>
-                <button type="button" role="menuitem" data-bg="dark">Dark background</button>
-                <button type="button" role="menuitem" data-bg="transparent">Transparent</button>
+            <div class="title-row">
+              <h2 id="velocity-title">Velocity per week</h2>
+              <div class="tools">
+                <select id="vel-bucket" class="compact-select" aria-label="Period length">
+                  <option value="1">Per week</option>
+                  <option value="2">Per 2 weeks</option>
+                </select>
+                <div class="segmented" id="vel-toggle" role="group" aria-label="Velocity chart view">
+                  <button type="button" data-mode="total" aria-pressed="true">Total</button>
+                  <button type="button" data-mode="type" aria-pressed="false">By type</button>
+                </div>
+                <details class="export-menu" data-chart="chart-velocity">
+                  <summary class="download" title="Download as PNG">PNG ▾</summary>
+                  <div class="menu" role="menu">
+                    <button type="button" role="menuitem" data-bg="light">Light background</button>
+                    <button type="button" role="menuitem" data-bg="dark">Dark background</button>
+                    <button type="button" role="menuitem" data-bg="transparent">Transparent</button>
+                  </div>
+                </details>
               </div>
-            </details>
-            <h2>Velocity per week</h2>
+            </div>
             <p class="subtle" id="velocity-sub"></p>
           </div>
           <div class="chart-box"><canvas id="chart-velocity" role="img" aria-label="Weekly velocity bar chart"></canvas></div>
@@ -226,6 +238,9 @@
           <dd>A burn-up plots completed work against total scope as separate lines, so added work stays visible. A burn-down plots only remaining work, which is simplest to read when scope is fixed.
             The page picks one automatically: if more than 15% of the final scope was added or removed after the release started, it shows the burn-up; otherwise the burn-down. Use the toggle to switch.
             On the burn-down, triangles mark days when tickets were added, so those upward jumps aren't mistaken for the team slowing down.</dd>
+          <dt>Velocity: total or by type</dt>
+          <dd>“Total” shows estimated work completed per period, with a rolling average and the fit-window average. “By type” stacks the same total by issue type (for example Bug vs Feature), so you can see where capacity is going.
+            With “Per 2 weeks”, periods are pairs of weeks counted from the release start, and the rolling average spans the same number of weeks as the smoothing setting (rounded to whole periods).</dd>
           <dt>Ticket flow: created vs completed, or net</dt>
           <dd>“Created vs completed” shows both counts side by side for each week. “Net” shows completed minus created: a positive bar means the backlog shrank that week, a negative bar means it grew. The line is the running total since the release started.
             The page shows the net view when at least 15% of tickets were created after the release started, and the side-by-side view otherwise.</dd>
