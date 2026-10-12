@@ -251,6 +251,7 @@ body.printing details > summary::-webkit-details-marker { display: none; }
    drawn for print are never rescaled by the browser when the page is laid out. */
 body.printing main { max-width: 680px; padding: 0; }
 body.printing .grid-2 { grid-template-columns: 1fr; }
+body.printing .headline .big { font-size: 24px; }
 body.printing .card,
 body.printing .tile { box-shadow: none; }
 body.printing .card:has(.chart-box),

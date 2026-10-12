@@ -925,6 +925,8 @@
     $('print-title').textContent = `${name}: release projection`;
     $('print-meta').textContent = `Data as of ${dateFmt.format(current.asOf)} · Generated ${dateFmt.format(Date.now())}`;
     $('print-settings').innerHTML = settingsSummary(current).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+    // The settings form itself never prints; its collapsed state controls the summary block instead.
+    $('print-settings').hidden = $('controls').classList.contains('collapsed');
     // Browsers use the document title as the suggested PDF file name.
     document.title = `${name} projection ${toInputDate(current.asOf)}`;
     exporting.pixelRatio = 2;
