@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Release Projection</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="js/projection.js"></script>
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <h1>Release projection</h1>
+      <p class="subtle">Load a Jira CSV export of one fix version to see when it is likely to finish. Everything runs in your browser; the file is never uploaded.</p>
+    </div>
+    <label class="file-button">
+      <input id="file-input" type="file" accept=".csv,text/csv">
+      <span>Choose CSV…</span>
+    </label>
+  </header>
+
+  <main>
+    <section id="drop-zone" class="drop-zone">
+      <p><strong>Drop a Jira CSV export here</strong> or use “Choose CSV…”.</p>
+      <p class="subtle">Best results: in Jira search for <code>fixVersion = "Your Version"</code>, then <em>Export → Export CSV (all fields)</em>.
+        A “current fields” export also works if the columns include <em>Resolved</em> and either <em>Story Points</em> or <em>Original estimate</em>.</p>
+      <p id="load-error" class="error" hidden></p>
+    </section>
+
+    <section id="report" hidden>
+      <div class="file-line subtle" id="file-line"></div>
+
+      <form id="controls" class="controls" onsubmit="return false">
+        <label>Fix version <select id="ctl-version"></select></label>
+        <label>Estimate by
+          <select id="ctl-unit">
+            <option value="points">Story points</option>
+            <option value="days">Original estimate (days)</option>
+            <option value="count">Ticket count</option>
+          </select>
+        </label>
+        <label data-for-unit="days">Hours per day <input id="ctl-hpd" type="number" min="1" max="24" step="0.5" value="8"></label>
+        <label data-for-unit="days">Estimate uncertainty ± <span class="inline"><input id="ctl-unc" type="number" min="0" max="200" step="5" value="30">%</span></label>
+        <label data-for-unit="points days">Unestimated tickets
+          <select id="ctl-fill">
+            <option value="median">Use median estimate</option>
+            <option value="mean">Use mean estimate</option>
+            <option value="zero">Count as zero</option>
+          </select>
+        </label>
+        <label>Release start <input id="ctl-start" type="date"></label>
+        <label>As of <input id="ctl-asof" type="date"></label>
+        <label>Fit window
+          <select id="ctl-fit">
+            <option value="0">All weeks since start</option>
+            <option value="3">Last 3 weeks</option>
+            <option value="4">Last 4 weeks</option>
+            <option value="6">Last 6 weeks</option>
+            <option value="8">Last 8 weeks</option>
+            <option value="12">Last 12 weeks</option>
+          </select>
+        </label>
+        <label>Polynomial degree
+          <select id="ctl-degree">
+            <option value="2">2 (quadratic)</option>
+            <option value="3">3 (cubic)</option>
+          </select>
+        </label>
+        <label>Velocity smoothing
+          <select id="ctl-roll">
+            <option value="1">None (single weeks)</option>
+            <option value="2" selected>2-week rolling average</option>
+            <option value="3">3-week rolling average</option>
+            <option value="4">4-week rolling average</option>
+          </select>
+        </label>
+        <fieldset>
+          <legend>Issue types included</legend>
+          <div id="ctl-types" class="checks"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Resolutions that count as completed work</legend>
+          <div id="ctl-resolutions" class="checks"></div>
+          <p class="hint">Unchecked resolutions (e.g. “No Action”) are removed from scope.</p>
+        </fieldset>
+      </form>
+
+      <ul id="warnings" class="warnings"></ul>
+
+      <section class="headline" id="headline"></section>
+
+      <section class="tiles" id="tiles"></section>
+
+      <section class="card">
+        <h2>Projected finish dates</h2>
+        <div class="table-wrap"><table id="projection-table" class="data-table"></table></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Burn-up with projections</h2>
+          <p class="subtle" id="burnup-sub"></p>
+        </div>
+        <div class="chart-box tall"><canvas id="chart-burnup" role="img" aria-label="Burn-up chart of scope and completed work with projected finish lines"></canvas></div>
+      </section>
+
+      <div class="grid-2">
+        <section class="card">
+          <div class="card-head">
+            <h2>Velocity per week</h2>
+            <p class="subtle" id="velocity-sub"></p>
+          </div>
+          <div class="chart-box"><canvas id="chart-velocity" role="img" aria-label="Weekly velocity bar chart"></canvas></div>
+        </section>
+        <section class="card">
+          <div class="card-head">
+            <h2>Ticket completion rate</h2>
+            <p class="subtle">Tickets created vs completed each week. If creation keeps pace with completion, the end date keeps moving.</p>
+          </div>
+          <div class="chart-box"><canvas id="chart-tickets" role="img" aria-label="Tickets created and completed per week"></canvas></div>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Chance of finishing by date</h2>
+          <p class="subtle">Monte Carlo: replays randomly chosen past weeks until the remaining work is done, 5,000 times.</p>
+        </div>
+        <div class="chart-box"><canvas id="chart-mc" role="img" aria-label="Cumulative probability of finishing by each date"></canvas></div>
+      </section>
+
+      <section class="card">
+        <h2>Remaining tickets</h2>
+        <div class="table-wrap"><table id="remaining-table" class="data-table"></table></div>
+      </section>
+
+      <details class="card methods">
+        <summary><h2>How each projection works</h2></summary>
+        <dl>
+          <dt>Linear regression</dt>
+          <dd>A least-squares straight line through cumulative completed work for each day in the fit window, extended until it reaches today's total scope.</dd>
+          <dt>Linear + scope growth</dt>
+          <dd>Also fits a line to total scope over time and finds where the two lines cross. This is the realistic date if tickets keep being added at the same rate.</dd>
+          <dt>Polynomial regression</dt>
+          <dd>A quadratic or cubic least-squares curve through the same points. It captures acceleration or slowdown, but it can swing a lot on little data. If the curve flattens before reaching scope, there is no date.</dd>
+          <dt>Average velocity</dt>
+          <dd>Remaining work ÷ the mean amount completed per full week in the fit window.</dd>
+          <dt>Optimistic / pessimistic bounds</dt>
+          <dd>Optimistic: every remaining ticket is one Fibonacci step smaller than its estimate (5 → 3), delivered at the fastest rolling-average velocity seen. Pessimistic: one step larger (5 → 8), at the slowest non-zero rolling velocity. For Original estimate, the ± uncertainty percentage is used instead of Fibonacci steps.</dd>
+          <dt>Ticket rate</dt>
+          <dd>Open tickets ÷ the mean number of tickets completed per week. This ignores estimates entirely, which makes it a useful cross-check.</dd>
+          <dt>Monte Carlo</dt>
+          <dd>Picks random past full weeks (with replacement) and plays them forward until remaining work hits zero, 5,000 times. P50 means half of the simulated futures finished by that date; P85 is a common commitment date.</dd>
+          <dt>Caveats</dt>
+          <dd>In-progress tickets count as fully remaining. Tickets created before the release start count as initial scope. Weekly figures use calendar weeks starting on Monday, so holidays and time off show up as slow weeks.</dd>
+        </dl>
+      </details>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
