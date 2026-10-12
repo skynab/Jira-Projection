@@ -1,0 +1,30 @@
+Summary,Issue key,Issue Type,Status,Status category,Resolution,Assignee,Created,Updated,Resolved,Fix versions,Fix versions,Custom field (Story Points)
+Story item 1,FIX-101,Story,Done,Done,Done,Alex Rivera,20/Feb/26 10:00 AM,04/Mar/26 10:00 AM,04/Mar/26 10:00 AM,Demo 2.0,,1.0
+Bug item 2,FIX-102,Bug,Done,Done,Done,Sam Chen,21/Feb/26 10:00 AM,07/Mar/26 11:00 AM,07/Mar/26 11:00 AM,Demo 2.0,,2.0
+Story item 3,FIX-103,Story,Done,Done,Done,Jordan Patel,22/Feb/26 10:00 AM,10/Mar/26 12:00 PM,10/Mar/26 12:00 PM,Demo 2.0,,3.0
+Bug item 4,FIX-104,Bug,Done,Done,Done,Alex Rivera,23/Feb/26 10:00 AM,13/Mar/26 10:00 AM,13/Mar/26 10:00 AM,Demo 2.0,Demo 1.9,5.0
+Story item 5,FIX-105,Story,Done,Done,Done,Sam Chen,24/Feb/26 10:00 AM,16/Mar/26 11:00 AM,16/Mar/26 11:00 AM,Demo 2.0,,3.0
+Bug item 6,FIX-106,Bug,Done,Done,Done,Jordan Patel,20/Feb/26 10:00 AM,19/Mar/26 12:00 PM,19/Mar/26 12:00 PM,Demo 2.0,,2.0
+Story item 7,FIX-107,Story,Done,Done,Done,Alex Rivera,21/Feb/26 10:00 AM,22/Mar/26 10:00 AM,22/Mar/26 10:00 AM,Demo 2.0,,8.0
+Bug item 8,FIX-108,Bug,Done,Done,Done,Sam Chen,22/Feb/26 10:00 AM,25/Mar/26 11:00 AM,25/Mar/26 11:00 AM,Demo 2.0,,3.0
+Story item 9,FIX-109,Story,Done,Done,Done,Jordan Patel,23/Feb/26 10:00 AM,28/Mar/26 12:00 PM,28/Mar/26 12:00 PM,Demo 2.0,,5.0
+Bug item 10,FIX-110,Bug,Done,Done,Done,Alex Rivera,24/Feb/26 10:00 AM,31/Mar/26 10:00 AM,31/Mar/26 10:00 AM,Demo 2.0,,2.0
+Story item 11,FIX-111,Story,Done,Done,Done,Sam Chen,20/Feb/26 10:00 AM,03/Apr/26 11:00 AM,03/Apr/26 11:00 AM,Demo 2.0,,1.0
+Bug item 12,FIX-112,Bug,Done,Done,Done,Jordan Patel,21/Feb/26 10:00 AM,06/Apr/26 12:00 PM,06/Apr/26 12:00 PM,Demo 2.0,,2.0
+Story item 13,FIX-113,Story,Done,Done,Done,Alex Rivera,22/Feb/26 10:00 AM,09/Apr/26 10:00 AM,09/Apr/26 10:00 AM,Demo 2.0,,3.0
+Bug item 14,FIX-114,Bug,Done,Done,Done,Sam Chen,23/Feb/26 10:00 AM,12/Apr/26 11:00 AM,12/Apr/26 11:00 AM,Demo 2.0,,5.0
+Bug item 15,FIX-115,Bug,No Action,Done,No Action,Jordan Patel,24/Feb/26 10:00 AM,05/Apr/26 10:00 AM,05/Apr/26 10:00 AM,Demo 2.0,,2.0
+Bug item 16,FIX-116,Bug,No Action,Done,No Action,Alex Rivera,20/Feb/26 10:00 AM,06/Apr/26 10:00 AM,06/Apr/26 10:00 AM,Demo 2.0,,2.0
+Story item 17,FIX-117,Story,To Do,To Do,,Sam Chen,21/Feb/26 10:00 AM,02/Apr/26 10:00 AM,,Demo 2.0,,5.0
+Story item 18,FIX-118,Story,To Do,To Do,,Jordan Patel,22/Feb/26 10:00 AM,03/Apr/26 10:00 AM,,Demo 2.0,,5.0
+Bug item 19,FIX-119,Bug,Done,Done,Done,Alex Rivera,07/Mar/26 10:00 AM,10/Mar/26 10:00 AM,10/Mar/26 10:00 AM,Demo 2.0,,1.0
+Bug item 20,FIX-120,Bug,Done,Done,Done,Sam Chen,11/Mar/26 10:00 AM,14/Mar/26 10:00 AM,14/Mar/26 10:00 AM,Demo 2.0,,2.0
+Bug item 21,FIX-121,Bug,Done,Done,Done,Jordan Patel,15/Mar/26 10:00 AM,18/Mar/26 10:00 AM,18/Mar/26 10:00 AM,Demo 2.0,,3.0
+Bug item 22,FIX-122,Bug,Done,Done,Done,Alex Rivera,19/Mar/26 10:00 AM,22/Mar/26 10:00 AM,22/Mar/26 10:00 AM,Demo 2.0,,5.0
+Story item 23,FIX-123,Story,Code Review,In Progress,,Sam Chen,23/Mar/26 10:00 AM,02/May/26 10:00 AM,,Demo 2.0,,3.0
+Story item 24,FIX-124,Story,Code Review,In Progress,,Jordan Patel,27/Mar/26 10:00 AM,06/May/26 10:00 AM,,Demo 2.0,,3.0
+Bug item 25,FIX-125,Bug,To Do,To Do,,Alex Rivera,31/Mar/26 10:00 AM,10/May/26 10:00 AM,,Demo 2.0,,2.0
+Bug item 26,FIX-126,Bug,To Do,To Do,,Sam Chen,04/Apr/26 10:00 AM,14/May/26 10:00 AM,,Demo 2.0,,2.0
+Story item 27,FIX-127,Story,To Do,To Do,,Jordan Patel,08/Apr/26 10:00 AM,18/May/26 10:00 AM,,Demo 2.0,,3.0
+Story item 28,FIX-128,Story,To Do,To Do,,,12/Apr/26 10:00 AM,22/May/26 10:00 AM,,Demo 2.0,,3.0
+Release item 29,FIX-129,Release,To Do,To Do,,Sam Chen,02/Mar/26 10:00 AM,26/Apr/26 5:00 PM,,Demo 2.0,,3.0

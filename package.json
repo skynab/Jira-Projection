@@ -1,0 +1,12 @@
+{
+  "name": "jira-release-projection",
+  "private": true,
+  "description": "Static page that projects a Jira release's finish date from a CSV export.",
+  "scripts": {
+    "test": "node test/projection.test.js",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

@@ -48,5 +48,9 @@ Estimates come from **Story Points** or **Original estimate** (converted to days
 ## Tests
 
 ```bash
-node test/projection.test.js [path/to/export.csv]
+npm test                      # projection math (Node, no dependencies)
+npm install && npx playwright install chromium
+npm run test:e2e              # browser tests against test/fixtures/release.csv
 ```
+
+Both run on every push via GitHub Actions. Page scripts live in `js/ui/` (one file per area) and `js/app.js` (entry point); `js/projection.js` holds all the math.
