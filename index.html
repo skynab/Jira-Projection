@@ -96,6 +96,11 @@
             <label><input type="checkbox" id="ctl-mc-scope">Keep adding scope at the historical rate</label>
           </div>
         </fieldset>
+        <fieldset id="credit-fieldset">
+          <legend>Work in progress counts as partly done</legend>
+          <div id="ctl-credit" class="credit-grid"></div>
+          <p class="hint">Open tickets in these statuses count only their unfinished share as remaining work.</p>
+        </fieldset>
         <fieldset>
           <legend>Resolutions that count as completed work</legend>
           <div id="ctl-resolutions" class="checks"></div>
@@ -122,6 +127,20 @@
       <section class="tiles-section" data-section="tiles">
         <h2>Key Numbers</h2>
         <div class="tiles" id="tiles"></div>
+      </section>
+
+      <section class="card" data-section="target">
+        <div class="card-head">
+          <div class="title-row">
+            <h2>Target Date</h2>
+            <div class="tools">
+              <label class="target-input">Ship by <input type="date" id="ctl-target"></label>
+              <button type="button" class="ghost-button compact" id="clear-target">Clear</button>
+            </div>
+          </div>
+          <p class="subtle" id="target-sub"></p>
+        </div>
+        <div id="target-body"></div>
       </section>
 
       <section class="card" data-section="projections">
@@ -280,6 +299,10 @@
           <dt>Ticket flow: created vs completed, or net</dt>
           <dd>“Created vs completed” shows both counts side by side for each week. “Net” shows completed minus created: a positive bar means the backlog shrank that week, a negative bar means it grew. The line is the running total since the release started.
             The page shows the net view when at least 15% of tickets were created after the release started, and the side-by-side view otherwise.</dd>
+          <dt>Target date</dt>
+          <dd>The chance of finishing by the date is the share of the 5,000 Monte Carlo runs that finish by then. Required pace is remaining work divided by the weeks left. “To be 85% confident” replays random past weeks up to the target (net of their new scope, if “Keep adding scope” is on) and takes the amount completed in the slowest 15% of runs; anything above that would need to be cut. The target is remembered per fix version.</dd>
+          <dt>Partial credit for work in progress</dt>
+          <dd>Each in-progress status can be marked as partly done (for example Code Review 70%). Open tickets in that status then count only their unfinished share in every projection, bound, Monte Carlo run and assignee figure. On the charts the projections start that much ahead of the actual line. Completed work and velocity history are unchanged. The export only records each ticket's current status, so credit is not applied when “As of” is set to an earlier date or to the earlier points of the forecast history.</dd>
           <dt>Forecast history</dt>
           <dd>The whole projection re-run as of the end of each past week, with the same settings and release start, so you can see whether the finish date is holding or slipping. The trend figure is the average change in the P50 date per week of real time, from a straight-line fit through the points.</dd>
           <dt>Data quality</dt>

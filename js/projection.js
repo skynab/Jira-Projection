@@ -196,6 +196,8 @@
       versions: tally((i) => i.versions),
       types: tally((i) => i.type),
       resolutions: tally((i) => resolutionLabel(i)),
+      // Statuses of open tickets that are under way (candidates for partial credit).
+      wipStatuses: tally((i) => (!isResolved(i) && isInProgress(i) ? i.status : null)),
       latestDate: Math.max(...issues.map((i) => Math.max(i.created, i.updated || 0, i.resolvedAt || 0))),
     };
   }
@@ -211,6 +213,12 @@
     if (!isResolved(it)) return null;
     return it.resolution || it.status || 'Done';
   }
+  const NOT_STARTED = /^(to do|todo|open|backlog|new|selected for development|ready|ready for development|reopened)$/i;
+  function isInProgress(it) {
+    if (it.statusCat) return /in progress/i.test(it.statusCat);
+    return !!it.status && !NOT_STARTED.test(it.status);
+  }
+
   // Best available "finished" timestamp, plus whether it is only an approximation.
   function doneTimestamp(it) {
     if (it.resolvedAt) return { at: it.resolvedAt, approx: false };
@@ -338,6 +346,7 @@
     mcRuns: 5000,
     mcUncertainty: true,      // Monte Carlo: randomise each open ticket within its min/max bound
     mcScopeGrowth: false,     // Monte Carlo: replay each sampled week's scope additions too
+    statusCredit: {},         // status name -> fraction already done for open tickets in it (0-1)
   };
 
   function buildModel(data, userSettings) {
@@ -440,8 +449,20 @@
 
     const total = scopeCum[T];
     const completed = doneCum[T];
-    const remaining = Math.max(0, openRows.reduce((a, r) => a + r.est, 0));
-    for (const r of openRows) { r.low = boundEstimate(r.est, -1); r.high = boundEstimate(r.est, 1); }
+    // Partial credit: an open ticket in a status marked as partly done only counts its
+    // unfinished share as remaining work (and its bounds shrink the same way).
+    // The export only holds each ticket's current status, so credit is applied only when
+    // projecting from the export's own date, never in a backtest or past history point.
+    const creditApplies = asOf >= dayStart(data.latestDate);
+    for (const r of openRows) {
+      const c = creditApplies ? Math.min(1, Math.max(0, +(s.statusCredit || {})[r.it.status] || 0)) : 0;
+      r.credit = r.resolvedLater ? 0 : c;
+      r.left = r.est * (1 - r.credit);
+      r.low = boundEstimate(r.est, -1) * (1 - r.credit);
+      r.high = boundEstimate(r.est, 1) * (1 - r.credit);
+    }
+    const credit = openRows.reduce((a, r) => a + r.est - r.left, 0);
+    const remaining = Math.max(0, openRows.reduce((a, r) => a + r.left, 0));
     const remainingLow = openRows.reduce((a, r) => a + r.low, 0);
     const remainingHigh = openRows.reduce((a, r) => a + r.high, 0);
     function boundEstimate(e, dir) {
@@ -524,7 +545,7 @@
         const base = poly.at(T);
         for (let d = T + 1; d <= T + MAX_HORIZON_DAYS; d++) {
           if (poly.at(d) < poly.at(d - 1)) { peak = d - 1; break; }
-          if (completed + poly.at(d) - base >= total) { hit = d; break; }
+          if (completed + credit + poly.at(d) - base >= total) { hit = d; break; }
         }
         proj.poly = { day: hit, stopDay: hit == null ? peak : null, note: hit == null ? 'Curve flattens out before reaching scope' : null };
       } else proj.poly = { day: null, note: 'Not enough data points' };
@@ -584,7 +605,7 @@
       start, asOf, T, horizon,
       unit: s.unit,
       totals: {
-        scope: total, completed, remaining, remainingLow, remainingHigh,
+        scope: total, completed, remaining, remainingLow, remainingHigh, credit,
         tickets: scopeRows.length, ticketsDone: doneRows.length, ticketsOpen: openRows.length,
         ticketsDiscarded: discardedRows.length, baseScopeN,
         avgVelocity: avgVel, avgTickets: mean(ticketVel), weeksInWindow: vel.length,
@@ -592,7 +613,7 @@
       series: { scopeCum, doneCum, scopeNCum, doneNCum, scopePerDay: scope, scopeNPerDay: scopeN },
       scopeChange,
       fits: { linear: lin, poly, scope: scopeLin, fitStart },
-      weeks, rolling,
+      weeks, rolling, windowWeeks,
       projections: proj,
       finished,
       openRows: openRows.sort((a, b) => b.est - a.est),
@@ -611,7 +632,7 @@
       if (!by.has(name)) by.set(name, { name, remaining: 0, open: 0, delivered: 0 });
       return by.get(name);
     };
-    for (const r of openRows) { const a = get(r.assignee); a.remaining += r.est; a.open++; }
+    for (const r of openRows) { const a = get(r.assignee); a.remaining += r.left; a.open++; }
     for (const r of rows) {
       if (!r.delivered) continue;
       const d = dayDiff(r.doneAt, start);
@@ -637,9 +658,9 @@
     for (let i = 0; i < runs; i++) {
       let rem = 0;
       for (const r of openRows) {
-        if (!uncertainty) { rem += r.est; continue; }
+        if (!uncertainty) { rem += r.left; continue; }
         const x = rnd();
-        rem += x < 0.25 ? r.low : x < 0.75 ? r.est : r.high;
+        rem += x < 0.25 ? r.low : x < 0.75 ? r.left : r.high;
       }
       let w = 0;
       while (rem > 0 && w < MAX_WEEKS) {
@@ -809,6 +830,49 @@
     return fit ? { perWeek: fit.slope * 7, first: pts[0], last: pts[pts.length - 1] } : null;
   }
 
+  // ---------------------------------------------------------------- target date
+  // Chance of finishing by a date (from the Monte Carlo runs), the weekly pace it needs,
+  // and how much would have to be cut to be 85% confident, from simulated capacity:
+  // random past weeks (net of their scope additions if that option is on) summed up to
+  // the target, taking the 15th percentile.
+
+  function targetCheck(model, target) {
+    if (model.empty || target == null) return null;
+    const day = dayDiff(target, model.start);
+    const weeksLeft = (day - model.T) / 7;
+    const rem = model.totals.remaining;
+    if (model.finished) return { day, weeksLeft, done: true, chance: 1 };
+    if (weeksLeft <= 0) return { day, weeksLeft, past: true };
+    const mc = model.projections.monteCarlo;
+    const out = {
+      day, weeksLeft,
+      chance: mc ? mc.probabilityBy(day) : null,
+      requiredPerWeek: rem / weeksLeft,
+      avgPerWeek: model.totals.avgVelocity,
+    };
+    const weeks = model.windowWeeks;
+    if (weeks.length && weeks.some((w) => w.velocity > 0)) {
+      const rnd = mulberry32(7);
+      const growth = model.settings.mcScopeGrowth;
+      const full = Math.floor(weeksLeft), frac = weeksLeft - full;
+      const caps = [];
+      for (let i = 0; i < 4000; i++) {
+        let cap = 0;
+        for (let w = 0; w <= full; w++) {
+          const wk = weeks[Math.floor(rnd() * weeks.length)];
+          const share = w < full ? 1 : frac;
+          cap += share * (wk.velocity - (growth ? Math.max(0, wk.scopeAdded) : 0));
+        }
+        caps.push(cap);
+      }
+      caps.sort((a, b) => a - b);
+      out.capacity85 = Math.max(0, percentile(caps, 0.15));
+      out.cut85 = Math.max(0, rem - out.capacity85);
+    }
+    out.verdict = out.chance == null ? null : out.chance >= 0.85 ? 'on-track' : out.chance >= 0.5 ? 'at-risk' : 'unlikely';
+    return out;
+  }
+
   const UNIT_ABBR = { points: 'pts', days: 'days', count: 'tickets' };
 
   function unitWord(unit) {
@@ -821,7 +885,7 @@
 
   const api = {
     MS_DAY, FIB, DEFAULT_SETTINGS, DELIVERED_RESOLUTIONS, SCOPE_CHURN_THRESHOLD,
-    parseCsv, parseIssues, parseJiraDate, estimateToDays, buildModel, forecastHistory, forecastDrift,
+    parseCsv, parseIssues, parseJiraDate, estimateToDays, buildModel, forecastHistory, forecastDrift, targetCheck,
     linearFit, polyFit, fibDown, fibUp, dayStart, addDays, dayDiff, mondayOf, round,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

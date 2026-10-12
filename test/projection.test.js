@@ -125,6 +125,32 @@ const hist = P.forecastHistory(data, { asOf: new Date(2026, 0, 19).getTime() }, 
 assert.strictEqual(hist[hist.length - 1].asOf, hm.asOf);
 assert(hist.every((h, i) => i === 0 || h.asOf > hist[i - 1].asOf));
 assert.strictEqual(hist[hist.length - 1].linear, hm.projections.linear.day);
+// Partial credit: a 4-point ticket in Code Review at 75% done leaves 1 point remaining.
+const wip = P.parseIssues([
+  'Issue key,Status,Status category,Resolution,Created,Resolved,Custom field (Story Points)',
+  'W-1,Done,Done,Done,01/Jan/26 9:00 AM,06/Jan/26 9:00 AM,2',
+  'W-2,Done,Done,Done,01/Jan/26 9:00 AM,13/Jan/26 9:00 AM,2',
+  'W-3,Code Review,In Progress,,01/Jan/26 9:00 AM,,4',
+  'W-4,To Do,To Do,,01/Jan/26 9:00 AM,,4',
+].join('\n'));
+assert.deepStrictEqual(wip.wipStatuses, [{ name: 'Code Review', count: 1 }]);
+const asOfW = new Date(2026, 0, 19).getTime();
+const noCredit = P.buildModel(wip, { asOf: asOfW });
+const withCredit = P.buildModel(wip, { asOf: asOfW, statusCredit: { 'Code Review': 0.75 } });
+assert.strictEqual(noCredit.totals.remaining, 8);
+assert.strictEqual(withCredit.totals.remaining, 5);
+assert.strictEqual(withCredit.totals.credit, 3);
+assert(withCredit.projections.velocity.day < noCredit.projections.velocity.day);
+// Backtests ignore credit: statuses in the export are today's, not the past date's.
+assert.strictEqual(P.buildModel(wip, { asOf: new Date(2026, 0, 10).getTime(), statusCredit: { 'Code Review': 0.75 } }).totals.credit, 0);
+
+// Target check: past targets are flagged; later targets are at least as likely.
+assert.strictEqual(P.targetCheck(noCredit, new Date(2026, 0, 10).getTime()).past, true);
+const soon = P.targetCheck(noCredit, new Date(2026, 1, 2).getTime());
+const late = P.targetCheck(noCredit, new Date(2026, 3, 1).getTime());
+assert(late.chance >= soon.chance);
+assert(Math.abs(soon.requiredPerWeek - 8 / soon.weeksLeft) < 1e-9);
+assert(late.cut85 <= soon.cut85);
 console.log('unit tests passed');
 
 // Smoke-test real exports passed on the command line.

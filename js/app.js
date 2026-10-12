@@ -40,7 +40,7 @@
   // Modelling preferences (not file-specific filters) survive reloads in this browser.
 
   const STORE_KEY = 'jira-projection:settings';
-  const PERSIST = ['hoursPerDay', 'daysUncertainty', 'fillMissing', 'fitWeeks', 'polyDegree', 'rollWeeks', 'mcUncertainty', 'mcScopeGrowth', 'flowBucket', 'velBucket', 'velView'];
+  const PERSIST = ['hoursPerDay', 'daysUncertainty', 'fillMissing', 'fitWeeks', 'polyDegree', 'rollWeeks', 'mcUncertainty', 'mcScopeGrowth', 'flowBucket', 'velBucket', 'velView', 'statusCredit'];
   function loadPrefs() {
     try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
   }
@@ -124,6 +124,12 @@
     if (settings.velBucket !== 2) settings.velBucket = 1;
     if (settings.velView !== 'type') settings.velView = 'total';
     $('flow-bucket').value = String(settings.flowBucket);
+    if (!settings.statusCredit || typeof settings.statusCredit !== 'object') settings.statusCredit = {};
+    $('credit-fieldset').hidden = !data.wipStatuses.length;
+    $('ctl-credit').innerHTML = data.wipStatuses.map((st) =>
+      `<label>${esc(st.name)} <span class="count">${st.count}</span>` +
+      `<input type="number" min="0" max="100" step="5" data-status="${esc(st.name)}" value="${Math.round((settings.statusCredit[st.name] || 0) * 100)}">%</label>`).join('');
+    loadTarget();
     $('vel-bucket').value = String(settings.velBucket);
     // Issue-type colours follow the type (ordered by how common it is in the whole file),
     // so filtering never repaints the remaining types.
@@ -148,7 +154,7 @@
   $('controls').addEventListener('change', (e) => {
     const t = e.target;
     switch (t.id) {
-      case 'ctl-version': settings.version = t.value || null; break;
+      case 'ctl-version': settings.version = t.value || null; loadTarget(); break;
       case 'ctl-unit': settings.unit = t.value; syncUnitVisibility(); break;
       case 'ctl-hpd': settings.hoursPerDay = Math.max(1, +t.value || 8); break;
       case 'ctl-unc': settings.daysUncertainty = Math.max(0, +t.value || 0) / 100; break;
@@ -163,6 +169,14 @@
       default:
         if (t.closest('#ctl-types')) {
           settings.excludedTypes = [...document.querySelectorAll('#ctl-types input:not(:checked)')].map((i) => i.value);
+        } else if (t.closest('#ctl-credit')) {
+          // Keep credit for statuses not in this file (it's remembered across files).
+          const credit = Object.assign({}, settings.statusCredit);
+          document.querySelectorAll('#ctl-credit input').forEach((i) => {
+            const v = Math.min(100, Math.max(0, +i.value || 0));
+            if (v) credit[i.dataset.status] = v / 100; else delete credit[i.dataset.status];
+          });
+          settings.statusCredit = credit;
         } else if (t.closest('#ctl-resolutions')) {
           settings.deliveredResolutions = [...document.querySelectorAll('#ctl-resolutions input:checked')].map((i) => i.value);
         }
@@ -179,6 +193,7 @@
     if (!data) return;
     const model = P.buildModel(data, settings);
     model.history = model.empty ? [] : P.forecastHistory(data, settings, model);
+    model.target = model.empty ? null : P.targetCheck(model, settings.target);
     current = model;
     const cols = data.columns;
     $('file-line').textContent = `${fileName} · ${data.issues.length} issues · ` +
@@ -206,6 +221,7 @@
     renderTiles(model);
     renderProjectionTable(model);
     renderQuality(model);
+    renderTarget(model);
     renderTrend(model);
     renderHistory(model);
     renderVelocity(model);
@@ -237,7 +253,7 @@
     const tiles = [
       ['Scope', `${fmtNum(t.scope)} ${u}`, `${t.tickets} tickets`],
       ['Completed', `${fmtNum(t.completed)} ${u}`, `${fmtNum(pct, 0)}% · ${t.ticketsDone} tickets`],
-      ['Remaining', `${fmtNum(t.remaining)} ${u}`, `${t.ticketsOpen} open tickets`],
+      ['Remaining', `${fmtNum(t.remaining)} ${u}`, `${t.ticketsOpen} open tickets` + (t.credit > 0 ? ` · ${fmtNum(t.credit)} ${u} in-progress credit` : '')],
       ['Avg velocity', `${fmtNum(t.avgVelocity)} ${u}/wk`, `over ${t.weeksInWindow} full weeks`],
       ['Tickets completed', `${fmtNum(t.avgTickets)}/wk`, 'same window'],
       ['Removed from scope', `${t.ticketsDiscarded}`, 'non-delivered resolutions'],
@@ -301,12 +317,32 @@
     afterDatasetsDraw(chart, _args, opts) {
       const { ctx, chartArea, scales } = chart;
       for (const l of opts.lines || []) {
+        if (l.horizontal) {
+          const y = scales.y.getPixelForValue(l.x);
+          if (y < chartArea.top || y > chartArea.bottom) continue;
+          ctx.save();
+          ctx.strokeStyle = l.color;
+          ctx.lineWidth = l.width || 1;
+          if (l.dash) ctx.setLineDash(l.dash);
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, y);
+          ctx.lineTo(chartArea.right, y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.font = '12px system-ui, -apple-system, sans-serif';
+          const w = ctx.measureText(l.label).width;
+          if (!exporting.transparent) { ctx.fillStyle = css('--surface'); ctx.fillRect(chartArea.left + 2, y - 15, w + 4, 14); }
+          ctx.fillStyle = opts.textColor;
+          ctx.fillText(l.label, chartArea.left + 4, y - 4);
+          ctx.restore();
+          continue;
+        }
         if (!isFinite(l.x)) continue;
         const x = scales.x.getPixelForValue(l.x);
         if (x < chartArea.left || x > chartArea.right) continue;
         ctx.save();
         ctx.strokeStyle = l.color;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = l.width || 1;
         if (l.dash) ctx.setLineDash(l.dash);
         ctx.beginPath();
         ctx.moveTo(x, chartArea.top);
@@ -482,7 +518,8 @@
   function trendOptions(model, c, yLabel) {
     const u = unitShort(model.unit);
     const opts = baseOptions(c);
-    opts.scales.x = dayAxis(model, c, 0, model.horizon);
+    const tg = model.target && !model.target.past && !model.target.done ? model.target.day : null;
+    opts.scales.x = dayAxis(model, c, 0, tg != null ? Math.max(model.horizon, tg + 3) : model.horizon);
     opts.scales.y.title = { display: true, text: yLabel, color: c.muted };
     opts.scales.y.min = 0;
     opts.plugins.tooltip.callbacks = {
@@ -490,6 +527,7 @@
       label: (i) => i.raw.note || `${i.dataset.label}: ${fmtNum(i.raw.y)} ${u}`,
     };
     opts.plugins.vlines.lines = [{ x: model.T, label: 'As of', color: c.muted, dash: [3, 3] }];
+    if (tg != null) opts.plugins.vlines.lines.push(targetLine(model, c, tg));
     return opts;
   }
 
@@ -539,6 +577,7 @@
     draw('chart-burnup', { type: 'line', data: { datasets }, options: trendOptions(model, c, `${u} remaining`) });
     const fitDesc = model.settings.fitWeeks ? `the last ${model.settings.fitWeeks} weeks` : 'all weeks since the start';
     $('burnup-sub').textContent = `Remaining ${u} over time, with projections from the as-of date to zero. Regression lines are fitted to ${fitDesc}. ` +
+      (totals.credit > 0 ? `Projections start ${fmtNum(totals.credit)} ${u} below the remaining line: credit for work in progress. ` : '') +
       'The shaded cone starts from the optimistic and pessimistic remaining work.';
   }
 
@@ -564,16 +603,17 @@
       if (fits.linear) {
         const end = until(p.linear.day);
         datasets.push(line('_linear history', alpha(c.s2, 0.5), history(fits.linear), faint));
-        datasets.push(line('Linear fit', c.s2, ahead(totals.completed, fits.linear, end), { borderDash: [6, 4], pointRadius: endDot(end) }));
+        datasets.push(line('Linear fit', c.s2, ahead(totals.completed + totals.credit, fits.linear, end), { borderDash: [6, 4], pointRadius: endDot(end) }));
       }
       if (fits.poly) {
         const end = until(p.poly.day ?? p.poly.stopDay);
         datasets.push(line('_poly history', alpha(c.s3, 0.5), history(fits.poly), faint));
-        datasets.push(line(`Polynomial fit (deg ${model.settings.polyDegree})`, c.s3, ahead(totals.completed, fits.poly, end), { borderDash: [2, 3], pointRadius: endDot(end) }));
+        datasets.push(line(`Polynomial fit (deg ${model.settings.polyDegree})`, c.s3, ahead(totals.completed + totals.credit, fits.poly, end), { borderDash: [2, 3], pointRadius: endDot(end) }));
       }
       if (p.optimistic.day != null && p.pessimistic.day != null) {
         const end = until(p.pessimistic.day);
-        const cone = (proj) => pts((d) => (d >= T && d <= end ? Math.min(totals.completed + proj.amount, totals.completed + (proj.velocity / 7) * (d - T)) : null));
+        const base = totals.completed + totals.credit;
+        const cone = (proj) => pts((d) => (d >= T && d <= end ? Math.min(base + proj.amount, base + (proj.velocity / 7) * (d - T)) : null));
         datasets.push(line('Optimistic', c.s4, cone(p.optimistic), { borderWidth: 1.5, pointRadius: endDot(until(p.optimistic.day)) }));
         datasets.push(line('Pessimistic', c.s4, cone(p.pessimistic), { borderWidth: 1.5, fill: '-1', backgroundColor: alpha(c.s4, 0.12), pointRadius: endDot(end) }));
       }
@@ -583,11 +623,70 @@
 
     const fitDesc = model.settings.fitWeeks ? `the last ${model.settings.fitWeeks} weeks` : 'all weeks since the start';
     $('burnup-sub').textContent = `Cumulative ${u} in scope vs completed. Regressions are fitted to ${fitDesc} (faint lines) and projected from today's actual progress. ` +
+      (totals.credit > 0 ? `Projections start ${fmtNum(totals.credit)} ${u} above the completed line: credit for work in progress. ` : '') +
       'The shaded cone runs from the optimistic to the pessimistic bound.';
   }
 
   function barDataset(label, color, data, extra) {
     return Object.assign({ type: 'bar', label, data, backgroundColor: color, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.7, barPercentage: 0.9 }, extra);
+  }
+
+  // ---------------------------------------------------------------- target date
+  // The target is remembered per fix version (or file, when there are no versions).
+
+  const TARGET_KEY = 'jira-projection:targets';
+  const VERDICT = {
+    'on-track': { label: 'On track', icon: '✓' },
+    'at-risk': { label: 'At risk', icon: '!' },
+    unlikely: { label: 'Unlikely', icon: '✕' },
+  };
+  const targetScope = () => settings.version || fileName;
+  function readTargets() {
+    try { return JSON.parse(localStorage.getItem(TARGET_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function loadTarget() {
+    const v = readTargets()[targetScope()];
+    settings.target = v ? fromInputDate(v) : null;
+    $('ctl-target').value = v || '';
+  }
+  function saveTarget() {
+    const all = readTargets();
+    if (settings.target) all[targetScope()] = toInputDate(settings.target); else delete all[targetScope()];
+    try { localStorage.setItem(TARGET_KEY, JSON.stringify(all)); } catch (e) { /* not persisted */ }
+  }
+  // The date input lives in the section header, outside the settings form.
+  $('ctl-target').addEventListener('change', (e) => { settings.target = fromInputDate(e.target.value); saveTarget(); render(); });
+  $('clear-target').addEventListener('click', () => { settings.target = null; $('ctl-target').value = ''; saveTarget(); render(); });
+
+  function targetLine(model, c, day) {
+    return { x: day, label: `Target ${shortFmt.format(dayToMs(model, day))}`, color: c.text, dash: [6, 3], width: 1.5 };
+  }
+
+  function renderTarget(model) {
+    const tc = model.target, u = unitShort(model.unit);
+    // With no target there is nothing to report, so the section stays out of the PDF.
+    document.querySelector('[data-section=target]').classList.toggle('no-target', !settings.target);
+    if (!settings.target) {
+      $('target-sub').textContent = '';
+      $('target-body').innerHTML = '<p class="empty">Pick the date you need to ship to see the chance of making it and what it would take.</p>';
+      return;
+    }
+    $('target-sub').textContent = `Ship by ${dateFmt.format(settings.target)}${tc && !tc.past && !tc.done ? ` · ${fmtNum(tc.weeksLeft)} weeks after the as-of date` : ''}.`;
+    if (tc.done) { $('target-body').innerHTML = '<p class="empty">All work is already complete.</p>'; return; }
+    if (tc.past) { $('target-body').innerHTML = '<p class="empty">That date is on or before the as-of date.</p>'; return; }
+    const v = tc.verdict && VERDICT[tc.verdict];
+    const ratio = tc.avgPerWeek > 0 ? tc.requiredPerWeek / tc.avgPerWeek : null;
+    const tiles = [
+      ['Chance by target', tc.chance == null ? '—' : `${fmtNum(tc.chance * 100, 0)}%`, 'share of Monte Carlo runs done by then'],
+      ['Required pace', `${fmtNum(tc.requiredPerWeek)} ${u}/wk`,
+        ratio == null ? 'no velocity history yet' : `${fmtNum(ratio, 2)}× your ${fmtNum(tc.avgPerWeek)} ${u}/wk average`],
+      ['To be 85% confident', tc.cut85 == null ? '—' : tc.cut85 > 0 ? `Cut ${fmtNum(tc.cut85)} ${u}` : 'No cuts needed',
+        tc.capacity85 == null ? '' : `about ${fmtNum(tc.capacity85)} ${u} can be done by then in 85% of runs`],
+    ];
+    $('target-body').innerHTML =
+      (v ? `<p class="verdict ${tc.verdict}"><span class="icon" aria-hidden="true">${v.icon}</span>${v.label}</p>` : '') +
+      '<div class="tiles">' + tiles.map(([l, val, sub]) =>
+        `<div class="tile"><div class="label">${l}</div><div class="value">${val}</div><div class="sub">${esc(sub)}</div></div>`).join('') + '</div>';
   }
 
   // ---------------------------------------------------------------- forecast history
@@ -630,8 +729,9 @@
     const core = h.flatMap((p) => [p.p50, p.p85, p.linear]).filter((v) => v != null);
     const coreMin = Math.min(...core), coreMax = Math.max(...core);
     const growth = h.map((p) => p.scopeGrowth).filter((v) => v != null);
-    const yMin = Math.min(coreMin, ...growth);
-    const yMax = Math.max(coreMax, ...growth.map((v) => Math.min(v, coreMax + Math.max(14, coreMax - coreMin))));
+    const tgDay = model.target && !model.target.past && !model.target.done ? model.target.day : null;
+    const yMin = Math.min(coreMin, ...growth, ...(tgDay != null ? [tgDay] : []));
+    const yMax = Math.max(coreMax, ...(tgDay != null ? [tgDay] : []), ...growth.map((v) => Math.min(v, coreMax + Math.max(14, coreMax - coreMin))));
     const pad = Math.max(3, (yMax - yMin) * 0.06);
     const lo = Math.floor(yMin - pad), hi = Math.ceil(yMax + pad);
     const yStep = hi - lo <= 49 ? 7 : hi - lo <= 140 ? 14 : 28;
@@ -654,6 +754,7 @@
       title: (items) => (items.length ? `Forecast as of ${dateFmt.format(dayToMs(model, items[0].raw.x))}` : ''),
       label: (i) => `${i.dataset.label}: ${fmtDay(model, i.raw.y)}`,
     };
+    if (tgDay != null) opts.plugins.vlines.lines = [Object.assign(targetLine(model, c, tgDay), { horizontal: true })];
     draw('chart-history', { type: 'line', data: { datasets }, options: opts });
     const drift = driftText(model);
     $('history-why').textContent = drift ? drift.long : '';
@@ -835,7 +936,8 @@
     }
     const min = model.T;
     const finite = mc.samples.filter(isFinite);
-    const max = Math.min(model.T + 5 * 365, Math.ceil(finite.length ? finite[finite.length - 1] : model.T + 28) + 3);
+    const tgDay = model.target && !model.target.past && !model.target.done ? model.target.day : null;
+    const max = Math.max(tgDay != null ? tgDay + 3 : 0, Math.min(model.T + 5 * 365, Math.ceil(finite.length ? finite[finite.length - 1] : model.T + 28) + 3));
     const data = [];
     for (let d = min; d <= max; d++) data.push({ x: d, y: mc.probabilityBy(d) * 100 });
     const opts = baseOptions(c);
@@ -850,6 +952,7 @@
     opts.plugins.vlines.lines = [['P50', mc.p50, 0], ['P85', mc.p85, 1], ['P95', mc.p95, 2]]
       .filter(([, x]) => isFinite(x))
       .map(([name, x, row]) => ({ x, label: `${name} ${shortFmt.format(dayToMs(model, x))}`, color: c.muted, dash: [3, 3], row }));
+    if (tgDay != null) opts.plugins.vlines.lines.push(Object.assign(targetLine(model, c, tgDay), { row: 3 }));
     const parts = ['replays randomly chosen past weeks until the remaining work is done, 5,000 times'];
     if (model.settings.mcUncertainty && model.unit !== 'count') parts.push('ticket sizes vary within their min/max bounds');
     if (model.settings.mcScopeGrowth) parts.push('each replayed week also adds that week\'s new scope');
@@ -933,7 +1036,7 @@
       { key: 'est', label: `Estimate (${u})`, num: true, value: (r) => r.est },
     ], model.openRows, (r) =>
       `<tr><td class="nowrap">${esc(r.it.key)}</td><td>${esc(r.it.summary)}</td><td>${esc(r.it.type)}</td><td class="nowrap">${esc(status(r))}</td><td class="nowrap">${esc(r.it.assignee || '—')}</td>` +
-      `<td class="num">${fmtNum(r.est)}${r.missing ? ' <span class="note">(filled)</span>' : ''}</td></tr>`);
+      `<td class="num">${r.credit > 0 ? `<span class="note">${Math.round(r.credit * 100)}% done · </span>` : ''}${fmtNum(r.est)}${r.missing ? ' <span class="note">(filled)</span>' : ''}</td></tr>`);
   }
 
   function renderWeekly(model) {
@@ -992,6 +1095,11 @@
     if (p.bottleneck.name) lines.push(`Bottleneck: ${p.bottleneck.name}, ${fmtDay(model, p.bottleneck.day)}.`);
     const drift = driftText(model);
     if (drift) lines.push(`Forecast trend: ${drift.short}.`);
+    const tc = model.target;
+    if (tc && !tc.past && !tc.done && tc.chance != null) {
+      lines.push(`Target ${dateFmt.format(settings.target)}: ${fmtNum(tc.chance * 100, 0)}% chance (${VERDICT[tc.verdict].label.toLowerCase()}); needs ${fmtNum(tc.requiredPerWeek)} ${u}/week vs ${fmtNum(tc.avgPerWeek)} average` +
+        (tc.cut85 > 0 ? `; cut about ${fmtNum(tc.cut85)} ${u} to be 85% confident.` : '.'));
+    }
     return lines.join('\n');
   }
 
@@ -1020,6 +1128,8 @@
       ['Monte Carlo', `5,000 runs${mc.length ? `, ${mc.join(', ')}` : ''}`],
       ['Issue types', types.join(', ') || 'None'],
       ['Counted as delivered', delivered.join(', ') || 'None'],
+      ['In-progress credit', data.wipStatuses.map((w) => w.name).filter((n) => (st.statusCredit || {})[n]).map((n) => `${n} ${Math.round(st.statusCredit[n] * 100)}%`).join(', ') || 'None'],
+      ['Target date', settings.target ? dateFmt.format(settings.target) : 'None'],
     ];
   }
 

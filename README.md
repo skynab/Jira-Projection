@@ -29,6 +29,8 @@ Estimates come from **Story Points** or **Original estimate** (converted to days
 
 - **Projected finish dates** from linear and polynomial regression, average velocity, ticket rate, optimistic/pessimistic bounds and a Monte Carlo simulation (P50/P85/P95).
 - **Burn-up or burn-down chart.** It picks the burn-up when scope changed a lot during the release.
+- **Target date check.** Pick a ship date to see the chance of hitting it, the weekly pace it needs, and how much to cut to be 85% confident.
+- **Partial credit for work in progress.** Count tickets in Code Review, Test and other in-progress statuses as partly done.
 - **Forecast history.** The finish date the page would have projected at the end of each past week, so you can see whether the date is holding or slipping.
 - **Data-quality checks.** Flags tracking tickets counted as work, unestimated or oversized tickets, unassigned or stale work and similar problems, with one-click fixes where possible.
 - **Velocity chart.** Total or by issue type, per week or per 2 weeks.
