@@ -33,6 +33,11 @@
     </section>
 
     <section id="report" hidden>
+      <section id="print-header" class="print-only">
+        <h1 id="print-title"></h1>
+        <p class="subtle" id="print-meta"></p>
+        <dl id="print-settings" class="print-settings"></dl>
+      </section>
       <div class="file-line subtle" id="file-line"></div>
 
       <form id="controls" class="controls" onsubmit="return false">
@@ -103,6 +108,7 @@
         <div class="headline" id="headline"></div>
         <div class="headline-actions">
           <button type="button" id="copy-summary" class="ghost-button">Copy summary</button>
+          <button type="button" id="export-pdf" class="ghost-button" title="Opens the print dialog. Choose “Save as PDF” as the destination.">Export PDF</button>
           <span id="copy-status" class="subtle" role="status"></span>
         </div>
       </section>

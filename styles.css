@@ -227,3 +227,52 @@ main { padding-bottom: 48px; }
 .methods dl { margin: 12px 0 0; }
 .methods dt { font-weight: 600; margin-top: 10px; }
 .methods dd { margin: 2px 0 0; color: var(--text-secondary); }
+
+/* ---------------------------------------------------------------- PDF / print
+   body.printing is applied by the Export PDF button (and on Ctrl/Cmd+P) just before the
+   print dialog opens, so charts can be re-rendered at the print width in the light theme. */
+.print-only { display: none; }
+body.printing .print-only { display: block; }
+body.printing .page-header,
+body.printing #drop-zone,
+body.printing #controls,
+body.printing .file-line,
+body.printing .headline-actions,
+body.printing .title-row .tools,
+body.printing .export-menu { display: none !important; }
+body.printing details > summary { list-style: none; cursor: default; }
+body.printing details > summary::-webkit-details-marker { display: none; }
+/* 680px fits the printable width of both A4 and Letter at 14mm margins, so the charts
+   drawn for print are never rescaled by the browser when the page is laid out. */
+body.printing main { max-width: 680px; padding: 0; }
+body.printing .grid-2 { grid-template-columns: 1fr; }
+body.printing .card,
+body.printing .tile { box-shadow: none; }
+body.printing .card:has(.chart-box),
+body.printing .tile,
+body.printing .headline-row,
+body.printing #print-header { break-inside: avoid; }
+body.printing .card-head { break-after: avoid; }
+/* Scroll containers can't be split across pages, so let tables flow (Chrome repeats
+   their header rows on each page); short tables stay with their heading. */
+body.printing .table-wrap { overflow: visible; }
+body.printing .card:has(#assignee-table) { break-inside: avoid; }
+body.printing .data-table tr { break-inside: avoid; }
+body.printing .data-table th button.sort { cursor: default; }
+canvas.print-hidden { display: none !important; }
+.print-snapshot { display: block; width: 100%; height: 100%; object-fit: contain; }
+body.printing .data-table th .sort-arrow { display: none; }
+#print-header { margin: 0 0 16px; }
+#print-header h1 { font-size: 22px; }
+.print-settings {
+  display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 12px 0 0;
+  font-size: 12.5px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+}
+.print-settings dt { color: var(--text-secondary); }
+.print-settings dd { margin: 0; }
+
+@page { margin: 14mm; }
+@media print {
+  body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .card, .tile { border-color: #ddd; }
+}
