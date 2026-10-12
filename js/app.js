@@ -410,7 +410,7 @@
       : `Scope barely changed after the release started (${pct}%${moved ? `: ${moved}` : ''}), so a burn-down shows remaining work most directly.`;
     $('trend-why').textContent = (chartMode && chartMode !== rec ? `Suggested: ${rec === 'up' ? 'burn-up' : 'burn-down'}. ` : 'Picked automatically. ') + why;
     setToggle('trend-toggle', mode);
-    $('trend-title').textContent = mode === 'up' ? 'Burn-up with projections' : 'Burn-down with projections';
+    $('trend-title').textContent = mode === 'up' ? 'Burn-Up with Projections' : 'Burn-Down with Projections';
     $('chart-burnup').setAttribute('aria-label', mode === 'up'
       ? 'Burn-up chart of scope and completed work with projected finish lines'
       : 'Burn-down chart of remaining work with projected finish lines');
@@ -653,7 +653,7 @@
       $('velocity-sub').textContent = `${u === 'tickets' ? 'Tickets' : 'Estimated ' + u} completed per ${per}, split by issue type. The dashed line is the average total.`;
       $('chart-velocity').setAttribute('aria-label', `Velocity per ${per} stacked by issue type`);
     }
-    $('velocity-title').textContent = `Velocity per ${per}`;
+    $('velocity-title').textContent = n === 2 ? 'Velocity per 2 Weeks' : 'Velocity per Week';
     draw('chart-velocity', { data: { labels, datasets }, options: opts });
   }
 
@@ -922,7 +922,7 @@
     root.setAttribute('data-theme', 'light');
     document.body.classList.add('printing');
     const name = settings.version || fileName;
-    $('print-title').textContent = `${name}: release projection`;
+    $('print-title').textContent = `${name}: Release Projection`;
     $('print-meta').textContent = `Data as of ${dateFmt.format(current.asOf)} · Generated ${dateFmt.format(Date.now())}`;
     $('print-settings').innerHTML = settingsSummary(current).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
     // The settings form itself never prints; its collapsed state controls the summary block instead.

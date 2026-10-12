@@ -197,10 +197,16 @@ main { padding-bottom: 48px; }
 .card > h2 { margin-bottom: 12px; }
 .card-head { margin-bottom: 12px; }
 .card-head .subtle { font-size: 13px; margin-top: 2px; }
-.grid-2 { align-items: start; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 0 16px; }
+.grid-2 { align-items: stretch; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 0 16px; }
 @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } .controls fieldset { grid-column: 1 / -1; } }
 
 .chart-box { position: relative; height: 280px; }
+/* Side-by-side cards share the row height; the shorter card's chart grows to fill it so
+   both charts end on the same line. flex-basis 0 plus an explicit min-height keeps the
+   canvas from feeding its own size back into the layout. A collapsed card stays compact. */
+.grid-2 > .card { display: flex; flex-direction: column; }
+.grid-2 > .card > .chart-box { flex: 1 1 0; min-height: 280px; height: auto; overflow: hidden; }
+.grid-2 > .card.collapsed { align-self: start; }
 .chart-box.tall { height: 420px; }
 
 .table-wrap { overflow-x: auto; }

@@ -12,7 +12,7 @@
 <body>
   <header class="page-header">
     <div>
-      <h1>Release projection</h1>
+      <h1>Release Projection</h1>
       <p class="subtle">Load a Jira CSV export of one fix version to see when it is likely to finish. Everything runs in your browser; the file is never uploaded.</p>
     </div>
     <div class="header-actions">
@@ -117,14 +117,14 @@
       <section class="tiles" id="tiles"></section>
 
       <section class="card" data-section="projections">
-        <h2>Projected finish dates</h2>
+        <h2>Projected Finish Dates</h2>
         <div class="table-wrap"><table id="projection-table" class="data-table"></table></div>
       </section>
 
       <section class="card" data-section="trend">
         <div class="card-head">
           <div class="title-row">
-            <h2 id="trend-title">Burn-up with projections</h2>
+            <h2 id="trend-title">Burn-Up with Projections</h2>
             <div class="tools">
               <div class="segmented" id="trend-toggle" role="group" aria-label="Chart type">
                 <button type="button" data-mode="up" aria-pressed="true">Burn-up</button>
@@ -150,7 +150,7 @@
         <section class="card" data-section="velocity">
           <div class="card-head">
             <div class="title-row">
-              <h2 id="velocity-title">Velocity per week</h2>
+              <h2 id="velocity-title">Velocity per Week</h2>
               <div class="tools">
                 <select id="vel-bucket" class="compact-select" aria-label="Period length">
                   <option value="1">Per week</option>
@@ -177,7 +177,7 @@
         <section class="card" data-section="tickets">
           <div class="card-head">
             <div class="title-row">
-              <h2>Ticket completion rate</h2>
+              <h2>Ticket Completion Rate</h2>
               <div class="tools">
                 <select id="flow-bucket" class="compact-select" aria-label="Period length">
                   <option value="1">Per week</option>
@@ -205,7 +205,7 @@
       </div>
 
       <details class="card table-toggle" data-section="weekly">
-        <summary>Weekly numbers behind the charts</summary>
+        <summary>Weekly Numbers Behind the Charts</summary>
         <div class="table-wrap"><table id="weekly-table" class="data-table"></table></div>
       </details>
 
@@ -219,7 +219,7 @@
               <button type="button" role="menuitem" data-bg="transparent">Transparent</button>
             </div>
           </details>
-          <h2>Chance of finishing by date</h2>
+          <h2>Chance of Finishing by Date</h2>
           <p class="subtle" id="mc-sub"></p>
         </div>
         <div class="chart-box"><canvas id="chart-mc" role="img" aria-label="Cumulative probability of finishing by each date"></canvas></div>
@@ -227,19 +227,19 @@
 
       <section class="card" data-section="assignees">
         <div class="card-head">
-          <h2>Remaining work by assignee</h2>
+          <h2>Remaining Work by Assignee</h2>
           <p class="subtle">Each person's open work divided by what they completed per week in the fit window. If work can't be reassigned, the slowest person sets the release date.</p>
         </div>
         <div class="table-wrap"><table id="assignee-table" class="data-table"></table></div>
       </section>
 
       <section class="card" data-section="remaining">
-        <h2>Remaining tickets</h2>
+        <h2>Remaining Tickets</h2>
         <div class="table-wrap"><table id="remaining-table" class="data-table"></table></div>
       </section>
 
       <details class="card methods" data-section="methods">
-        <summary><h2>How each projection works</h2></summary>
+        <summary><h2>How Each Projection Works</h2></summary>
         <dl>
           <dt>Burn-up or burn-down</dt>
           <dd>A burn-up plots completed work against total scope as separate lines, so added work stays visible. A burn-down plots only remaining work, which is simplest to read when scope is fixed.
