@@ -27,7 +27,8 @@ Columns the app reads: `Issue key`, `Issue Type`, `Summary`, `Status`, `Status c
 
 ## What it shows
 
-- **Burn-up**: cumulative scope vs completed work, with linear and polynomial regression lines, a scope-growth trend and an optimistic/pessimistic cone.
+- **Burn-up or burn-down**, with linear and polynomial regression projections, a scope-growth trend and an optimistic/pessimistic cone. The page picks the chart for each file: if more than 15% of the final scope was added or removed after the release started, it shows the burn-up (scope changes stay visible); otherwise the burn-down. A toggle switches between them, and on the burn-down, triangles mark days when work was added.
+  Regressions are fitted to history but projected forward from the actual numbers on the as-of date, so both charts and the projections table agree.
 - **Projected finish dates** from linear regression, linear regression with scope growth, polynomial regression (degree 2 or 3), average velocity, min/max bounds, ticket completion rate, and Monte Carlo P50/P85/P95.
 - **Velocity per week** with a rolling average.
 - **Ticket completion rate**: tickets created vs completed per week.

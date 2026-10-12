@@ -117,8 +117,13 @@
       <section class="card">
         <div class="card-head">
           <button type="button" class="download" data-chart="chart-burnup" title="Download as PNG">PNG</button>
-          <h2>Burn-up with projections</h2>
+          <div class="segmented" role="group" aria-label="Chart type">
+            <button type="button" data-mode="up" aria-pressed="true">Burn-up</button>
+            <button type="button" data-mode="down" aria-pressed="false">Burn-down</button>
+          </div>
+          <h2 id="trend-title">Burn-up with projections</h2>
           <p class="subtle" id="burnup-sub"></p>
+          <p class="hint" id="trend-why"></p>
         </div>
         <div class="chart-box tall"><canvas id="chart-burnup" role="img" aria-label="Burn-up chart of scope and completed work with projected finish lines"></canvas></div>
       </section>
@@ -172,12 +177,16 @@
       <details class="card methods">
         <summary><h2>How each projection works</h2></summary>
         <dl>
+          <dt>Burn-up or burn-down</dt>
+          <dd>A burn-up plots completed work against total scope as separate lines, so added work stays visible. A burn-down plots only remaining work, which is simplest to read when scope is fixed.
+            The page picks one automatically: if more than 15% of the final scope was added or removed after the release started, it shows the burn-up; otherwise the burn-down. Use the toggle to switch.
+            On the burn-down, triangles mark days when tickets were added, so those upward jumps aren't mistaken for the team slowing down.</dd>
           <dt>Linear regression</dt>
-          <dd>A least-squares straight line through cumulative completed work for each day in the fit window, extended until it reaches today's total scope.</dd>
+          <dd>A least-squares straight line through cumulative completed work for each day in the fit window. Its slope is projected forward from the actual completed work on the as-of date until it reaches today's total scope. The faint line on the burn-up shows the fit itself.</dd>
           <dt>Linear + scope growth</dt>
-          <dd>Also fits a line to total scope over time and finds where the two lines cross. This is the realistic date if tickets keep being added at the same rate.</dd>
+          <dd>Also fits a line to total scope over time. Remaining work shrinks by the completion rate minus the scope-growth rate. This is the realistic date if tickets keep being added at the same rate.</dd>
           <dt>Polynomial regression</dt>
-          <dd>A quadratic or cubic least-squares curve through the same points. It captures acceleration or slowdown, but it can swing a lot on little data. If the curve flattens before reaching scope, there is no date.</dd>
+          <dd>A quadratic or cubic least-squares curve through the same points, continued from the actual as-of value. It captures acceleration or slowdown, but it can swing a lot on little data. If the curve flattens before reaching scope, there is no date.</dd>
           <dt>Average velocity</dt>
           <dd>Remaining work ÷ the mean amount completed per full week in the fit window.</dd>
           <dt>Optimistic / pessimistic bounds</dt>

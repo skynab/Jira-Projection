@@ -6,6 +6,7 @@
 
   let data = null;
   let fileName = '';
+  let chartMode = null; // 'up' | 'down' once the user picks one; null = follow the recommendation
   const settings = {};
   const charts = {};
 
@@ -58,6 +59,7 @@
       return;
     }
     fileName = name;
+    chartMode = null;
     $('load-error').hidden = true;
     $('drop-zone').classList.add('compact');
     initControls();
@@ -191,7 +193,7 @@
     renderHeadline(model);
     renderTiles(model);
     renderProjectionTable(model);
-    renderBurnup(model);
+    renderTrend(model);
     renderVelocity(model);
     renderTickets(model);
     renderMonteCarlo(model);
@@ -319,10 +321,11 @@
           position: 'top', align: 'start',
           labels: {
             color: c.text, boxWidth: 16, boxHeight: 3, padding: 14,
+            filter: (l) => !l.text.startsWith('_'),
             // Swatch = the line/bar colour (area fills are only a faint wash).
             generateLabels: (chart) => Chart.defaults.plugins.legend.labels.generateLabels(chart).map((l) => {
               const ds = chart.data.datasets[l.datasetIndex];
-              const color = ds.type === 'bar' || chart.config.type === 'bar' ? (Array.isArray(ds.backgroundColor) ? ds.backgroundColor[0] : ds.backgroundColor) : ds.borderColor;
+              const color = ds.type === 'bar' || chart.config.type === 'bar' || ds.showLine === false ? (Array.isArray(ds.backgroundColor) ? ds.backgroundColor[0] : ds.backgroundColor) : ds.borderColor;
               return Object.assign(l, { fillStyle: color, strokeStyle: color, lineWidth: 0, lineDash: [] });
             }),
           },
@@ -372,36 +375,138 @@
     };
   }
 
-  function renderBurnup(model) {
+  // Burn-up / burn-down: the recommendation comes from how much scope moved during the release.
+  function renderTrend(model) {
+    const rec = model.scopeChange.recommended;
+    const mode = chartMode || rec;
+    const sc = model.scopeChange, u = unitShort(model.unit);
+    const pct = fmtNum(sc.churnShare * 100, 0);
+    const moved = [sc.added > 0 && `${fmtNum(sc.added)} ${u} added`, sc.removed > 0 && `${fmtNum(sc.removed)} ${u} removed`].filter(Boolean).join(' and ');
+    const why = rec === 'up'
+      ? `${pct}% of the scope changed after the release started (${moved}), so a burn-up keeps new work separate from progress.`
+      : `Scope barely changed after the release started (${pct}%${moved ? `: ${moved}` : ''}), so a burn-down shows remaining work most directly.`;
+    $('trend-why').textContent = (chartMode && chartMode !== rec ? `Suggested: ${rec === 'up' ? 'burn-up' : 'burn-down'}. ` : 'Picked automatically. ') + why;
+    document.querySelectorAll('.segmented button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+    $('trend-title').textContent = mode === 'up' ? 'Burn-up with projections' : 'Burn-down with projections';
+    $('chart-burnup').setAttribute('aria-label', mode === 'up'
+      ? 'Burn-up chart of scope and completed work with projected finish lines'
+      : 'Burn-down chart of remaining work with projected finish lines');
+    if (mode === 'up') renderBurnup(model); else renderBurndown(model);
+  }
+
+  document.querySelector('.segmented').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-mode]');
+    if (!b || !current || current.empty) return;
+    chartMode = b.dataset.mode;
+    renderTrend(current);
+  });
+
+  function trendKit(model) {
     const c = palette();
-    const { T, horizon, series, fits, projections: p, totals } = model;
+    const days = Array.from({ length: model.horizon + 1 }, (_, d) => d);
+    return {
+      c,
+      pts: (fn) => days.map((d) => ({ x: d, y: fn(d) })),
+      endDot: (lastDay) => (ctx) => (ctx.raw && ctx.raw.x === lastDay ? 4 : 0),
+      until: (day) => (day == null ? model.horizon : Math.min(model.horizon, Math.ceil(day))),
+      line: (label, color, data, extra) => Object.assign({
+        label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0,
+        pointHoverRadius: 4, pointBorderColor: c.surface, pointBorderWidth: 2, tension: 0, spanGaps: false,
+      }, extra),
+    };
+  }
+
+  function trendOptions(model, c, yLabel) {
     const u = unitShort(model.unit);
-    const days = Array.from({ length: horizon + 1 }, (_, d) => d);
-    const pts = (fn) => days.map((d) => ({ x: d, y: fn(d) }));
-    const endDot = (lastDay) => (ctx) => (ctx.raw && ctx.raw.x === lastDay ? 4 : 0);
-    const line = (label, color, data, extra) => Object.assign({
-      label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0,
-      pointHoverRadius: 4, pointBorderColor: c.surface, pointBorderWidth: 2, tension: 0, spanGaps: false,
-    }, extra);
+    const opts = baseOptions(c);
+    opts.scales.x = dayAxis(model, c, 0, model.horizon);
+    opts.scales.y.title = { display: true, text: yLabel, color: c.muted };
+    opts.scales.y.min = 0;
+    opts.plugins.tooltip.callbacks = {
+      title: (items) => items.length ? dateFmt.format(dayToMs(model, items[0].raw.x)) : '',
+      label: (i) => i.raw.note || `${i.dataset.label}: ${fmtNum(i.raw.y)} ${u}`,
+    };
+    opts.plugins.vlines.lines = [{ x: model.T, label: 'As of', color: c.muted, dash: [3, 3] }];
+    return opts;
+  }
+
+  function renderBurndown(model) {
+    const { c, pts, endDot, until, line } = trendKit(model);
+    const { T, series, fits, projections: p, totals } = model;
+    const u = unitShort(model.unit);
+    const remainingAt = (d) => series.scopeCum[d] - series.doneCum[d];
+
+    const datasets = [
+      line('Remaining', c.s1, pts((d) => (d <= T ? remainingAt(d) : null)), { fill: 'origin', backgroundColor: alpha(c.s1, 0.1) }),
+    ];
+    // Mark days when work was added, so upward steps read as new scope rather than lost progress.
+    // Same daily grid as the other datasets so the shared (index-mode) tooltip lines up.
+    const added = (d) => d >= 1 && d <= T && series.scopeNPerDay[d] > 0;
+    const adds = pts((d) => (added(d) ? remainingAt(d) : null)).map((pt) => (pt.y == null ? pt : Object.assign(pt, {
+      note: `Scope added: +${fmtNum(series.scopePerDay[pt.x])} ${u} (${series.scopeNPerDay[pt.x]} ticket${series.scopeNPerDay[pt.x] === 1 ? '' : 's'})`,
+    })));
+    if (adds.some((pt) => pt.y != null)) {
+      datasets.push({ label: 'Scope added', data: adds, showLine: false, pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 7, borderColor: c.surface, borderWidth: 2, backgroundColor: c.scope });
+    }
+    // Projections run forward from the as-of date down to zero remaining.
+    if (!model.finished) {
+      const fwd = (fn, endDay) => pts((d) => (d >= T && d <= endDay ? Math.max(0, fn(d)) : null));
+      const gain = (fit, d) => fit.at(d) - fit.at(T);
+      const rem = totals.remaining;
+      if (fits.scope && p.scopeGrowth && fits.linear) {
+        const end = until(p.scopeGrowth.day);
+        datasets.push(line('Linear + scope growth', c.scope, fwd((d) => rem + gain(fits.scope, d) - gain(fits.linear, d), end), { borderDash: [6, 4], borderWidth: 1.5, pointRadius: endDot(end) }));
+      }
+      if (fits.linear) {
+        const end = until(p.linear.day);
+        datasets.push(line('Linear fit', c.s2, fwd((d) => rem - gain(fits.linear, d), end), { borderDash: [6, 4], pointRadius: endDot(end) }));
+      }
+      if (fits.poly) {
+        const end = until(p.poly.day ?? p.poly.stopDay);
+        datasets.push(line(`Polynomial fit (deg ${model.settings.polyDegree})`, c.s3, fwd((d) => rem - gain(fits.poly, d), end), { borderDash: [2, 3], pointRadius: endDot(end) }));
+      }
+      if (p.optimistic.day != null && p.pessimistic.day != null) {
+        const end = until(p.pessimistic.day);
+        const cone = (proj) => fwd((d) => proj.amount - (proj.velocity / 7) * (d - T), end);
+        datasets.push(line('Optimistic', c.s4, cone(p.optimistic), { borderWidth: 1.5, pointRadius: endDot(until(p.optimistic.day)) }));
+        datasets.push(line('Pessimistic', c.s4, cone(p.pessimistic), { borderWidth: 1.5, fill: '-1', backgroundColor: alpha(c.s4, 0.12), pointRadius: endDot(end) }));
+      }
+    }
+
+    draw('chart-burnup', { type: 'line', data: { datasets }, options: trendOptions(model, c, `${u} remaining`) });
+    const fitDesc = model.settings.fitWeeks ? `the last ${model.settings.fitWeeks} weeks` : 'all weeks since the start';
+    $('burnup-sub').textContent = `Remaining ${u} over time, with projections from the as-of date to zero. Regression lines are fitted to ${fitDesc}. ` +
+      'The shaded cone starts from the optimistic and pessimistic remaining work.';
+  }
+
+  function renderBurnup(model) {
+    const { c, pts, endDot, until, line } = trendKit(model);
+    const { T, series, fits, projections: p, totals } = model;
+    const u = unitShort(model.unit);
 
     const datasets = [
       line('Scope', c.scope, pts((d) => (d <= T ? series.scopeCum[d] : null))),
       line('Completed', c.s1, pts((d) => (d <= T ? series.doneCum[d] : null)), { fill: 'origin', backgroundColor: alpha(c.s1, 0.1) }),
     ];
     if (!model.finished) {
-      const until = (day) => (day == null ? horizon : Math.min(horizon, Math.ceil(day)));
-      const fitLine = (fit, endDay) => pts((d) => (fit && d >= fits.fitStart && d <= endDay ? fit.at(d) : null));
+      // Faint fitted curves over the fit window show how well each regression matches history;
+      // the projections then continue from the actual values on the as-of date.
+      const history = (fit) => pts((d) => (d >= fits.fitStart && d <= T ? fit.at(d) : null));
+      const ahead = (base, fit, endDay) => pts((d) => (d >= T && d <= endDay ? base + fit.at(d) - fit.at(T) : null));
+      const faint = { borderWidth: 1, pointRadius: 0, pointHoverRadius: 0 };
       if (fits.scope && p.scopeGrowth) {
         const end = until(p.scopeGrowth.day);
-        datasets.push(line('Scope trend', c.scope, pts((d) => (d >= fits.fitStart && d <= end ? fits.scope.at(d) : null)), { borderDash: [6, 4], borderWidth: 1.5 }));
+        datasets.push(line('Scope trend', c.scope, ahead(totals.scope, fits.scope, end), { borderDash: [6, 4], borderWidth: 1.5 }));
       }
       if (fits.linear) {
         const end = until(p.linear.day);
-        datasets.push(line('Linear fit', c.s2, fitLine(fits.linear, end), { borderDash: [6, 4], pointRadius: endDot(end) }));
+        datasets.push(line('_linear history', alpha(c.s2, 0.5), history(fits.linear), faint));
+        datasets.push(line('Linear fit', c.s2, ahead(totals.completed, fits.linear, end), { borderDash: [6, 4], pointRadius: endDot(end) }));
       }
       if (fits.poly) {
-        const end = until(p.poly.day);
-        datasets.push(line(`Polynomial fit (deg ${model.settings.polyDegree})`, c.s3, fitLine(fits.poly, end), { borderDash: [2, 3], pointRadius: endDot(end) }));
+        const end = until(p.poly.day ?? p.poly.stopDay);
+        datasets.push(line('_poly history', alpha(c.s3, 0.5), history(fits.poly), faint));
+        datasets.push(line(`Polynomial fit (deg ${model.settings.polyDegree})`, c.s3, ahead(totals.completed, fits.poly, end), { borderDash: [2, 3], pointRadius: endDot(end) }));
       }
       if (p.optimistic.day != null && p.pessimistic.day != null) {
         const end = until(p.pessimistic.day);
@@ -411,19 +516,10 @@
       }
     }
 
-    const opts = baseOptions(c);
-    opts.scales.x = dayAxis(model, c, 0, horizon);
-    opts.scales.y.title = { display: true, text: u, color: c.muted };
-    opts.scales.y.min = 0;
-    opts.plugins.tooltip.callbacks = {
-      title: (items) => items.length ? dateFmt.format(dayToMs(model, items[0].raw.x)) : '',
-      label: (i) => `${i.dataset.label}: ${fmtNum(i.raw.y)} ${u}`,
-    };
-    opts.plugins.vlines.lines = [{ x: T, label: 'As of', color: c.muted, dash: [3, 3] }];
-    draw('chart-burnup', { type: 'line', data: { datasets }, options: opts });
+    draw('chart-burnup', { type: 'line', data: { datasets }, options: trendOptions(model, c, u) });
 
     const fitDesc = model.settings.fitWeeks ? `the last ${model.settings.fitWeeks} weeks` : 'all weeks since the start';
-    $('burnup-sub').textContent = `Cumulative ${u} in scope vs completed. Regression lines are fitted to ${fitDesc}. ` +
+    $('burnup-sub').textContent = `Cumulative ${u} in scope vs completed. Regressions are fitted to ${fitDesc} (faint lines) and projected from today's actual progress. ` +
       'The shaded cone runs from the optimistic to the pessimistic bound.';
   }
 

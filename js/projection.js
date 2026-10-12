@@ -13,6 +13,9 @@
   // Won't Do, Duplicate, Cannot Reproduce...) is treated as removed from scope by default.
   const DELIVERED_RESOLUTIONS = ['done', 'fixed', 'complete', 'completed', 'resolved', 'released'];
   const MAX_HORIZON_DAYS = 3 * 365;
+  // Share of final scope added or removed after the release started above which a
+  // burn-up is recommended; below it scope is effectively fixed and a burn-down reads best.
+  const SCOPE_CHURN_THRESHOLD = 0.15;
 
   // ---------------------------------------------------------------- dates
 
@@ -442,6 +445,16 @@
       return e;
     }
 
+    // --- how much scope moved during the release, and which chart that suggests
+    const added = total - baseScope;
+    const removed = discardedRows.filter((r) => r.doneAt >= start).reduce((a, r) => a + r.est, 0);
+    const churnShare = total > 0 ? (added + removed) / total : 0;
+    const scopeChange = {
+      initial: baseScope, added, removed, churnShare,
+      addedTickets: scopeNCum[T] - baseScopeN,
+      recommended: churnShare >= SCOPE_CHURN_THRESHOLD ? 'up' : 'down',
+    };
+
     // --- weekly buckets (weeks start on Monday, week 0 = start week)
     const nWeeks = Math.floor(T / 7) + 1;
     const weeks = [];
@@ -488,20 +501,26 @@
     if (finished) {
       proj.done = T;
     } else {
+      // Regressions supply the rate (and for the polynomial, the shape); projections start
+      // from the actual completed work on the as-of date so charts and dates line up.
       if (lin && lin.slope > 0) {
-        const d = (total - lin.intercept) / lin.slope;
-        proj.linear = { day: Math.max(d, T), note: d < T ? 'Fit line is already past scope; showing today' : null };
+        proj.linear = { day: T + remaining / lin.slope, note: null };
       } else proj.linear = { day: null, note: 'No upward trend in the fit window' };
 
       if (poly) {
-        let hit = null;
-        for (let d = T; d <= T + MAX_HORIZON_DAYS; d++) if (poly.at(d) >= total) { hit = d; break; }
-        proj.poly = { day: hit, note: hit == null ? 'Curve flattens out before reaching scope' : null };
+        // Completed work can't go down, so the curve is only followed while it is rising.
+        let hit = null, peak = null;
+        const base = poly.at(T);
+        for (let d = T + 1; d <= T + MAX_HORIZON_DAYS; d++) {
+          if (poly.at(d) < poly.at(d - 1)) { peak = d - 1; break; }
+          if (completed + poly.at(d) - base >= total) { hit = d; break; }
+        }
+        proj.poly = { day: hit, stopDay: hit == null ? peak : null, note: hit == null ? 'Curve flattens out before reaching scope' : null };
       } else proj.poly = { day: null, note: 'Not enough data points' };
 
       if (lin && scopeLin && lin.slope > scopeLin.slope) {
-        const d = (scopeLin.intercept - lin.intercept) / (lin.slope - scopeLin.slope);
-        proj.scopeGrowth = { day: Math.max(d, T), scopeAt: scopeLin.at(Math.max(d, T)), note: null };
+        const d = T + remaining / (lin.slope - scopeLin.slope);
+        proj.scopeGrowth = { day: d, scopeAt: total + scopeLin.slope * (d - T), note: null };
       } else if (scopeLin) {
         proj.scopeGrowth = { day: null, note: 'Scope is growing as fast as work is completed' };
       }
@@ -556,7 +575,8 @@
         ticketsDiscarded: discardedRows.length, baseScopeN,
         avgVelocity: avgVel, avgTickets: mean(ticketVel), weeksInWindow: vel.length,
       },
-      series: { scopeCum, doneCum, scopeNCum, doneNCum },
+      series: { scopeCum, doneCum, scopeNCum, doneNCum, scopePerDay: scope, scopeNPerDay: scopeN },
+      scopeChange,
       fits: { linear: lin, poly, scope: scopeLin, fitStart },
       weeks, rolling,
       projections: proj,
@@ -642,7 +662,7 @@
   }
 
   const api = {
-    MS_DAY, FIB, DEFAULT_SETTINGS, DELIVERED_RESOLUTIONS,
+    MS_DAY, FIB, DEFAULT_SETTINGS, DELIVERED_RESOLUTIONS, SCOPE_CHURN_THRESHOLD,
     parseCsv, parseIssues, parseJiraDate, estimateToDays, buildModel,
     linearFit, polyFit, fibDown, fibUp, dayStart, addDays, dayDiff, mondayOf, round,
   };

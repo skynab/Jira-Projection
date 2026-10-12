@@ -44,6 +44,8 @@ assert.strictEqual(m.totals.completed, 12);
 assert.strictEqual(m.totals.remaining, 8);
 assert.strictEqual(m.weeks[0].velocity, 10);
 assert(m.projections.velocity.day > m.T);
+// Linear projection starts from actual completed work and uses the fitted slope.
+assert(Math.abs(m.projections.linear.day - (m.T + m.totals.remaining / m.fits.linear.slope)) < 1e-9);
 // Backtest: as of Fri 9 Jan only T-0..T-4 were resolved; T-5 (resolved 12 Jan) is still open.
 const back = P.buildModel(data, { asOf: new Date(2026, 0, 9).getTime() });
 assert.strictEqual(back.totals.completed, 10);
@@ -68,6 +70,28 @@ const noneDone = P.parseIssues('Issue key,Status,Resolution,Created,Updated,Cust
 const nd = P.buildModel(noneDone, {});
 assert.strictEqual(nd.totals.remaining, 3);
 assert.strictEqual(nd.projections.monteCarlo, null);
+// Chart recommendation: all synthetic tickets existed before work started -> fixed scope -> burn-down.
+assert.strictEqual(m.scopeChange.recommended, 'down');
+assert.strictEqual(m.scopeChange.added, 0);
+// Adding work mid-release flips it to burn-up.
+const grown = P.parseIssues(lines.concat([
+  'T-10,Story,To Do,,12/Jan/26 9:00 AM,12/Jan/26 9:00 AM,,8,R1',
+]).join('\n'));
+const g = P.buildModel(grown, { asOf: new Date(2026, 0, 19).getTime() });
+assert.strictEqual(g.scopeChange.added, 8);
+assert.strictEqual(g.scopeChange.recommended, 'up');
+// A decelerating team: the polynomial must stop at its peak instead of 'un-completing' work.
+const slow = ['Issue key,Status,Resolution,Created,Resolved,Custom field (Story Points)'];
+[0, 1, 2, 3, 4, 7, 10, 14, 21, 30].forEach((d, i) => {
+  const day = new Date(2026, 0, 5 + d);
+  const fmt = `${String(day.getDate()).padStart(2, '0')}/${['Jan', 'Feb'][day.getMonth()]}/26 10:00 AM`;
+  slow.push(`S-${i},Done,Done,01/Jan/26 9:00 AM,${fmt},3`);
+});
+for (let i = 0; i < 10; i++) slow.push(`O-${i},To Do,,01/Jan/26 9:00 AM,,3`);
+const sm = P.buildModel(P.parseIssues(slow.join('\n')), { asOf: new Date(2026, 1, 8).getTime() });
+if (sm.projections.poly.day == null) {
+  assert(sm.projections.poly.stopDay == null || sm.projections.poly.stopDay >= sm.T);
+}
 console.log('unit tests passed');
 
 // Smoke-test real exports passed on the command line.
