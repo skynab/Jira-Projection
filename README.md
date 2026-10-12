@@ -31,7 +31,7 @@ Columns the app reads: `Issue key`, `Issue Type`, `Summary`, `Status`, `Status c
   Regressions are fitted to history but projected forward from the actual numbers on the as-of date, so both charts and the projections table agree.
 - **Projected finish dates** from linear regression, linear regression with scope growth, polynomial regression (degree 2 or 3), average velocity, min/max bounds, ticket completion rate, and Monte Carlo P50/P85/P95.
 - **Velocity per week** with a rolling average.
-- **Ticket completion rate**: tickets created vs completed per week.
+- **Ticket completion rate**, with two views: created vs completed per week, or net (completed − created) per week with a running total. Positive weeks mean the backlog shrank. The net view is picked automatically when at least 15% of tickets were created after the release started.
 - **Chance of finishing by date** from the Monte Carlo simulation.
 - **Remaining work by assignee**: each person's open work divided by their own recent throughput. The slowest person is reported as the assignee bottleneck.
 - **Remaining tickets** table, plus a collapsible table of the weekly numbers behind the charts.

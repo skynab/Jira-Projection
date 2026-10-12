@@ -80,6 +80,11 @@ const grown = P.parseIssues(lines.concat([
 const g = P.buildModel(grown, { asOf: new Date(2026, 0, 19).getTime() });
 assert.strictEqual(g.scopeChange.added, 8);
 assert.strictEqual(g.scopeChange.recommended, 'up');
+assert.strictEqual(m.scopeChange.flowRecommended, 'split');
+assert.strictEqual(g.scopeChange.flowRecommended, 'split'); // 1 of 11 tickets added mid-release (9%)
+const many = P.parseIssues(lines.concat([0, 1, 2].map((i) => `N-${i},Story,To Do,,12/Jan/26 9:00 AM,12/Jan/26 9:00 AM,,1,R1`)).join('\n'));
+assert.strictEqual(P.buildModel(many, { asOf: new Date(2026, 0, 19).getTime() }).scopeChange.flowRecommended, 'net'); // 3 of 13
+
 // A decelerating team: the polynomial must stop at its peak instead of 'un-completing' work.
 const slow = ['Issue key,Status,Resolution,Created,Resolved,Custom field (Story Points)'];
 [0, 1, 2, 3, 4, 7, 10, 14, 21, 30].forEach((d, i) => {

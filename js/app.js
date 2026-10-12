@@ -7,6 +7,7 @@
   let data = null;
   let fileName = '';
   let chartMode = null; // 'up' | 'down' once the user picks one; null = follow the recommendation
+  let flowMode = null;  // 'split' | 'net' likewise for the ticket chart
   const settings = {};
   const charts = {};
 
@@ -60,6 +61,7 @@
     }
     fileName = name;
     chartMode = null;
+    flowMode = null;
     $('load-error').hidden = true;
     $('drop-zone').classList.add('compact');
     initControls();
@@ -386,7 +388,7 @@
       ? `${pct}% of the scope changed after the release started (${moved}), so a burn-up keeps new work separate from progress.`
       : `Scope barely changed after the release started (${pct}%${moved ? `: ${moved}` : ''}), so a burn-down shows remaining work most directly.`;
     $('trend-why').textContent = (chartMode && chartMode !== rec ? `Suggested: ${rec === 'up' ? 'burn-up' : 'burn-down'}. ` : 'Picked automatically. ') + why;
-    document.querySelectorAll('.segmented button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+    setToggle('trend-toggle', mode);
     $('trend-title').textContent = mode === 'up' ? 'Burn-up with projections' : 'Burn-down with projections';
     $('chart-burnup').setAttribute('aria-label', mode === 'up'
       ? 'Burn-up chart of scope and completed work with projected finish lines'
@@ -394,12 +396,17 @@
     if (mode === 'up') renderBurnup(model); else renderBurndown(model);
   }
 
-  document.querySelector('.segmented').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-mode]');
-    if (!b || !current || current.empty) return;
-    chartMode = b.dataset.mode;
-    renderTrend(current);
-  });
+  function setToggle(id, mode) {
+    $(id).querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  }
+  function onToggle(id, fn) {
+    $(id).addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-mode]');
+      if (b && current && !current.empty) fn(b.dataset.mode);
+    });
+  }
+  onToggle('trend-toggle', (mode) => { chartMode = mode; renderTrend(current); });
+  onToggle('flow-toggle', (mode) => { flowMode = mode; renderTickets(current); });
 
   function trendKit(model) {
     const c = palette();
@@ -548,17 +555,57 @@
   }
 
   function renderTickets(model) {
+    const sc = model.scopeChange;
+    const rec = sc.flowRecommended;
+    const mode = flowMode || rec;
+    const pct = fmtNum(sc.addedTicketShare * 100, 0);
+    const why = rec === 'net'
+      ? `${pct}% of tickets (${sc.addedTickets}) were created after the release started, so the net view shows whether the backlog is actually shrinking.`
+      : `Only ${pct}% of tickets were created after the release started, so the side-by-side view is shown.`;
+    $('tickets-why').textContent = (flowMode && flowMode !== rec ? `Suggested: ${rec === 'net' ? 'net' : 'created vs completed'}. ` : 'Picked automatically. ') + why;
+    setToggle('flow-toggle', mode);
+
     const c = palette();
-    const labels = model.weeks.map((w) => shortFmt.format(w.start) + (w.complete ? '' : ' (partial)'));
-    const datasets = [
-      barDataset('Created', c.s2, model.weeks.map((w) => w.ticketsCreated)),
-      barDataset('Completed', c.s1, model.weeks.map((w) => w.ticketsDone)),
-    ];
+    const weeks = model.weeks;
+    const labels = weeks.map((w) => shortFmt.format(w.start) + (w.complete ? '' : ' (partial)'));
     const opts = baseOptions(c);
     opts.scales.x.grid = { display: false };
     opts.scales.y.ticks.precision = 0;
     opts.scales.y.title = { display: true, text: 'tickets / week', color: c.muted };
-    opts.plugins.legend.labels.pointStyle = 'rect';
+    let datasets;
+
+    if (mode === 'split') {
+      $('tickets-sub').textContent = 'Tickets created vs completed each week. If creation keeps pace with completion, the end date keeps moving.';
+      $('chart-tickets').setAttribute('aria-label', 'Tickets created and completed per week');
+      datasets = [
+        barDataset('Created', c.s2, weeks.map((w) => w.ticketsCreated)),
+        barDataset('Completed', c.s1, weeks.map((w) => w.ticketsDone)),
+      ];
+    } else {
+      $('tickets-sub').textContent = 'Completed minus created each week. Above zero the backlog shrank; below zero it grew. The line is the running total since the start.';
+      $('chart-tickets').setAttribute('aria-label', 'Net tickets completed minus created per week, with running total');
+      const net = weeks.map((w) => w.ticketsDone - w.ticketsCreated);
+      let run = 0;
+      const running = net.map((v) => (run += v));
+      const fade = (color, w) => (w.complete ? color : alpha(color, 0.4));
+      // Two bar series sharing one slot (grouped: false) so the legend can name both directions.
+      const pos = barDataset('Backlog shrank', weeks.map((w) => fade(c.s1, w)), net.map((v) => (v >= 0 ? v : null)), { grouped: false });
+      const neg = barDataset('Backlog grew', weeks.map((w) => fade(css('--negative'), w)), net.map((v) => (v < 0 ? v : null)),
+        { grouped: false, borderRadius: { bottomLeft: 4, bottomRight: 4 }, borderSkipped: 'top' });
+      datasets = [pos, neg, {
+        type: 'line', label: 'Running total', data: running, borderColor: c.scope, backgroundColor: c.scope,
+        borderWidth: 2, pointRadius: 3, pointBorderColor: c.surface, pointBorderWidth: 2, tension: 0,
+      }];
+      opts.scales.y.beginAtZero = true;
+      opts.scales.y.grid = { color: (ctx) => (ctx.tick.value === 0 ? c.axis : c.grid) };
+      opts.plugins.tooltip.callbacks = {
+        label: (i) => {
+          const w = weeks[i.dataIndex];
+          if (i.dataset.type === 'line') return `Running total: ${i.raw > 0 ? '+' : ''}${i.raw}`;
+          return `Net: ${i.raw > 0 ? '+' : ''}${i.raw} (${w.ticketsDone} completed − ${w.ticketsCreated} created)`;
+        },
+      };
+    }
     draw('chart-tickets', { data: { labels, datasets }, options: opts });
   }
 
@@ -617,12 +664,13 @@
     let rollIdx = 0;
     $('weekly-table').innerHTML =
       `<thead><tr><th>Week of</th><th class="num">Completed (${u})</th><th class="num">Rolling avg (${u})</th><th class="num">Scope added (${u})</th>` +
-      '<th class="num">Tickets completed</th><th class="num">Tickets created</th></tr></thead><tbody>' +
+      '<th class="num">Tickets completed</th><th class="num">Tickets created</th><th class="num">Net tickets</th></tr></thead><tbody>' +
       model.weeks.map((w) => {
         const roll = w.complete ? model.rolling[rollIdx++] : null;
         return `<tr><td>${dateFmt.format(w.start)}${w.complete ? '' : ' <span class="note">(partial)</span>'}</td>` +
           `<td class="num">${fmtNum(w.velocity)}</td><td class="num">${fmtNum(roll)}</td><td class="num">${fmtNum(w.scopeAdded)}</td>` +
-          `<td class="num">${w.ticketsDone}</td><td class="num">${w.ticketsCreated}</td></tr>`;
+          `<td class="num">${w.ticketsDone}</td><td class="num">${w.ticketsCreated}</td>` +
+          `<td class="num">${w.ticketsDone - w.ticketsCreated > 0 ? '+' : ''}${w.ticketsDone - w.ticketsCreated}</td></tr>`;
       }).join('') + '</tbody>';
   }
 

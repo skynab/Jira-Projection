@@ -116,12 +116,16 @@
 
       <section class="card">
         <div class="card-head">
-          <button type="button" class="download" data-chart="chart-burnup" title="Download as PNG">PNG</button>
-          <div class="segmented" role="group" aria-label="Chart type">
-            <button type="button" data-mode="up" aria-pressed="true">Burn-up</button>
-            <button type="button" data-mode="down" aria-pressed="false">Burn-down</button>
+          <div class="title-row">
+            <h2 id="trend-title">Burn-up with projections</h2>
+            <div class="tools">
+              <div class="segmented" id="trend-toggle" role="group" aria-label="Chart type">
+                <button type="button" data-mode="up" aria-pressed="true">Burn-up</button>
+                <button type="button" data-mode="down" aria-pressed="false">Burn-down</button>
+              </div>
+              <button type="button" class="download" data-chart="chart-burnup" title="Download as PNG">PNG</button>
+            </div>
           </div>
-          <h2 id="trend-title">Burn-up with projections</h2>
           <p class="subtle" id="burnup-sub"></p>
           <p class="hint" id="trend-why"></p>
         </div>
@@ -139,9 +143,18 @@
         </section>
         <section class="card">
           <div class="card-head">
-            <button type="button" class="download" data-chart="chart-tickets" title="Download as PNG">PNG</button>
-            <h2>Ticket completion rate</h2>
-            <p class="subtle">Tickets created vs completed each week. If creation keeps pace with completion, the end date keeps moving.</p>
+            <div class="title-row">
+              <h2>Ticket completion rate</h2>
+              <div class="tools">
+                <div class="segmented" id="flow-toggle" role="group" aria-label="Ticket chart view">
+                  <button type="button" data-mode="split" aria-pressed="true">Created vs completed</button>
+                  <button type="button" data-mode="net" aria-pressed="false">Net</button>
+                </div>
+                <button type="button" class="download" data-chart="chart-tickets" title="Download as PNG">PNG</button>
+              </div>
+            </div>
+            <p class="subtle" id="tickets-sub"></p>
+            <p class="hint" id="tickets-why"></p>
           </div>
           <div class="chart-box"><canvas id="chart-tickets" role="img" aria-label="Tickets created and completed per week"></canvas></div>
         </section>
@@ -181,6 +194,9 @@
           <dd>A burn-up plots completed work against total scope as separate lines, so added work stays visible. A burn-down plots only remaining work, which is simplest to read when scope is fixed.
             The page picks one automatically: if more than 15% of the final scope was added or removed after the release started, it shows the burn-up; otherwise the burn-down. Use the toggle to switch.
             On the burn-down, triangles mark days when tickets were added, so those upward jumps aren't mistaken for the team slowing down.</dd>
+          <dt>Ticket flow: created vs completed, or net</dt>
+          <dd>“Created vs completed” shows both counts side by side for each week. “Net” shows completed minus created: a positive bar means the backlog shrank that week, a negative bar means it grew. The line is the running total since the release started.
+            The page shows the net view when at least 15% of tickets were created after the release started, and the side-by-side view otherwise.</dd>
           <dt>Linear regression</dt>
           <dd>A least-squares straight line through cumulative completed work for each day in the fit window. Its slope is projected forward from the actual completed work on the as-of date until it reaches today's total scope. The faint line on the burn-up shows the fit itself.</dd>
           <dt>Linear + scope growth</dt>

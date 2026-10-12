@@ -452,8 +452,12 @@
     const scopeChange = {
       initial: baseScope, added, removed, churnShare,
       addedTickets: scopeNCum[T] - baseScopeN,
+      addedTicketShare: scopeNCum[T] > 0 ? (scopeNCum[T] - baseScopeN) / scopeNCum[T] : 0,
       recommended: churnShare >= SCOPE_CHURN_THRESHOLD ? 'up' : 'down',
     };
+    // Ticket-flow view: when a meaningful share of tickets arrived mid-release, the net
+    // (completed - created) view answers "is the backlog actually shrinking?" directly.
+    scopeChange.flowRecommended = scopeChange.addedTicketShare >= SCOPE_CHURN_THRESHOLD ? 'net' : 'split';
 
     // --- weekly buckets (weeks start on Monday, week 0 = start week)
     const nWeeks = Math.floor(T / 7) + 1;
