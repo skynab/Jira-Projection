@@ -178,6 +178,7 @@
   function render() {
     if (!data) return;
     const model = P.buildModel(data, settings);
+    model.history = model.empty ? [] : P.forecastHistory(data, settings, model);
     current = model;
     const cols = data.columns;
     $('file-line').textContent = `${fileName} · ${data.issues.length} issues · ` +
@@ -194,7 +195,7 @@
     $('warnings').innerHTML = warnings.map((w) => `<li>${esc(w)}</li>`).join('');
 
     if (model.empty) {
-      ['headline', 'tiles', 'projection-table', 'weekly-table', 'assignee-table', 'remaining-table'].forEach((id) => ($(id).innerHTML = ''));
+      ['headline', 'tiles', 'projection-table', 'weekly-table', 'assignee-table', 'remaining-table', 'quality-list', 'quality-count'].forEach((id) => ($(id).innerHTML = ''));
       Object.values(charts).forEach((c) => c.destroy());
       return;
     }
@@ -204,7 +205,9 @@
     renderHeadline(model);
     renderTiles(model);
     renderProjectionTable(model);
+    renderQuality(model);
     renderTrend(model);
+    renderHistory(model);
     renderVelocity(model);
     renderTickets(model);
     renderMonteCarlo(model);
@@ -587,6 +590,109 @@
     return Object.assign({ type: 'bar', label, data, backgroundColor: color, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.7, barPercentage: 0.9 }, extra);
   }
 
+  // ---------------------------------------------------------------- forecast history
+
+  function driftText(model) {
+    const drift = P.forecastDrift(model.history || [], 'p50') || P.forecastDrift(model.history || [], 'linear');
+    if (!drift) return null;
+    const key = drift.first.p50 != null && drift.last.p50 != null ? 'p50' : 'linear';
+    const label = key === 'p50' ? 'Monte Carlo P50' : 'linear-regression';
+    const d = Math.abs(drift.perWeek);
+    const span = `from ${fmtDay(model, drift.first[key])} (as of ${shortFmt.format(drift.first.asOf)}) to ${fmtDay(model, drift.last[key])} (as of ${shortFmt.format(drift.last.asOf)})`;
+    if (drift.perWeek > 1) return { short: `slipping about ${fmtNum(d)} days per week`, long: `Slipping: the ${label} date has moved about ${fmtNum(d)} days later for every week that passed, ${span}.` };
+    if (drift.perWeek < -1) return { short: `pulling in about ${fmtNum(d)} days per week`, long: `Pulling in: the ${label} date has moved about ${fmtNum(d)} days earlier for every week that passed, ${span}.` };
+    return { short: 'holding steady', long: `Holding steady: the ${label} date has moved less than a day per week, ${span}.` };
+  }
+
+  function renderHistory(model) {
+    const h = model.history || [];
+    const usable = h.filter((p) => p.p50 != null || p.linear != null);
+    if (usable.length < 2) {
+      if (charts['chart-history']) { charts['chart-history'].destroy(); delete charts['chart-history']; }
+      $('history-why').textContent = 'Needs at least three weeks of history since the release start.';
+      return;
+    }
+    const c = palette();
+    const series = (key) => h.map((p) => ({ x: p.day, y: p[key] ?? null }));
+    const line = (label, key, color, extra) => Object.assign({
+      label, data: series(key), borderColor: color, backgroundColor: color, borderWidth: 2,
+      pointRadius: 3, pointHoverRadius: 5, pointBorderColor: c.surface, pointBorderWidth: 2, tension: 0, spanGaps: true,
+      clip: 0, // values beyond the y range are cut at the plot edge instead of drawing over the legend
+    }, extra);
+    const datasets = [
+      line('Monte Carlo P50', 'p50', c.s1),
+      line('Monte Carlo P85', 'p85', alpha(c.s1, 0.55), { borderWidth: 1.5, pointRadius: 0, fill: '-1', backgroundColor: alpha(c.s1, 0.1) }),
+      line('Linear regression', 'linear', c.s2, { borderDash: [6, 4], pointRadius: 0 }),
+      line('Linear + scope growth', 'scopeGrowth', c.scope, { borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }),
+    ];
+    // Size the y axis to the main forecasts; a far-off scope-growth line may run off the top
+    // rather than squash everything else into a strip.
+    const core = h.flatMap((p) => [p.p50, p.p85, p.linear]).filter((v) => v != null);
+    const coreMin = Math.min(...core), coreMax = Math.max(...core);
+    const growth = h.map((p) => p.scopeGrowth).filter((v) => v != null);
+    const yMin = Math.min(coreMin, ...growth);
+    const yMax = Math.max(coreMax, ...growth.map((v) => Math.min(v, coreMax + Math.max(14, coreMax - coreMin))));
+    const pad = Math.max(3, (yMax - yMin) * 0.06);
+    const lo = Math.floor(yMin - pad), hi = Math.ceil(yMax + pad);
+    const yStep = hi - lo <= 49 ? 7 : hi - lo <= 140 ? 14 : 28;
+    const opts = baseOptions(c);
+    opts.scales.x = dayAxis(model, c, h[0].day, h[h.length - 1].day);
+    opts.scales.x.title = { display: true, text: 'Forecast made on', color: c.muted };
+    opts.scales.y = {
+      min: lo, max: hi,
+      grid: { color: c.grid }, border: { color: c.axis },
+      // Mondays, evenly spaced, like the date axes elsewhere.
+      afterBuildTicks: (axis) => {
+        const ticks = [];
+        for (let v = Math.ceil(lo / yStep) * yStep; v <= hi; v += yStep) ticks.push({ value: v });
+        axis.ticks = ticks;
+      },
+      ticks: { color: c.muted, callback: (v) => shortFmt.format(dayToMs(model, v)) },
+      title: { display: true, text: 'Projected finish', color: c.muted },
+    };
+    opts.plugins.tooltip.callbacks = {
+      title: (items) => (items.length ? `Forecast as of ${dateFmt.format(dayToMs(model, items[0].raw.x))}` : ''),
+      label: (i) => `${i.dataset.label}: ${fmtDay(model, i.raw.y)}`,
+    };
+    draw('chart-history', { type: 'line', data: { datasets }, options: opts });
+    const drift = driftText(model);
+    $('history-why').textContent = drift ? drift.long : '';
+  }
+
+  // ---------------------------------------------------------------- data quality
+
+  function renderQuality(model) {
+    const q = model.quality || [];
+    $('quality-count').textContent = q.length ? String(q.length) : '';
+    if (!q.length) {
+      $('quality-list').innerHTML = '<li class="ok">✓ No data-quality issues found.</li>';
+      return;
+    }
+    const keyList = (keys) => {
+      const shown = keys.slice(0, 8).map(esc).join(', ');
+      return keys.length > 8 ? `${shown} and ${keys.length - 8} more` : shown;
+    };
+    $('quality-list').innerHTML = q.map((f, i) =>
+      `<li><span class="sev ${f.severity}">${f.severity === 'warning' ? 'Warning' : 'Note'}</span>` +
+      `<div><div class="q-title">${esc(f.title)}</div><div class="q-detail">${esc(f.detail)}</div><div class="q-keys">${keyList(f.keys)}</div></div>` +
+      (f.fix ? `<button type="button" class="ghost-button" data-fix="${i}">${esc(f.fix.label)}</button>` : '<span></span>') +
+      '</li>').join('');
+  }
+
+  $('quality-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-fix]');
+    if (!btn || !current || current.empty) return;
+    const fix = current.quality[+btn.dataset.fix].fix;
+    if (fix.type === 'excludeType') {
+      settings.excludedTypes = [...new Set([...(settings.excludedTypes || []), fix.value])];
+      document.querySelectorAll('#ctl-types input').forEach((i) => { if (i.value === fix.value) i.checked = false; });
+    } else if (fix.type === 'setStart') {
+      settings.start = fix.value;
+      $('ctl-start').value = toInputDate(fix.value);
+    }
+    render();
+  });
+
   const TYPE_SLOTS = 8;
 
   function renderVelocity(model) {
@@ -884,6 +990,8 @@
     lines.push(`Range: ${fmtDay(model, p.optimistic.day)} (optimistic) to ${fmtDay(model, p.pessimistic.day)} (pessimistic).`);
     lines.push(`Linear regression: ${fmtDay(model, p.linear.day)}. With current scope growth: ${fmtDay(model, p.scopeGrowth && p.scopeGrowth.day)}.`);
     if (p.bottleneck.name) lines.push(`Bottleneck: ${p.bottleneck.name}, ${fmtDay(model, p.bottleneck.day)}.`);
+    const drift = driftText(model);
+    if (drift) lines.push(`Forecast trend: ${drift.short}.`);
     return lines.join('\n');
   }
 
@@ -986,6 +1094,7 @@
 
   const chartRenderers = {
     'chart-burnup': renderTrend,
+    'chart-history': renderHistory,
     'chart-velocity': renderVelocity,
     'chart-tickets': renderTickets,
     'chart-mc': renderMonteCarlo,

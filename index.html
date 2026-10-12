@@ -105,6 +105,11 @@
 
       <ul id="warnings" class="warnings"></ul>
 
+      <section class="card quality" data-section="quality">
+        <h2>Data Quality <span id="quality-count" class="count-badge"></span></h2>
+        <ul id="quality-list" class="quality-list"></ul>
+      </section>
+
       <section class="headline-row">
         <div class="headline" id="headline"></div>
         <div class="headline-actions">
@@ -147,6 +152,27 @@
           <p class="hint" id="trend-why"></p>
         </div>
         <div class="chart-box tall"><canvas id="chart-burnup" role="img" aria-label="Burn-up chart of scope and completed work with projected finish lines"></canvas></div>
+      </section>
+
+      <section class="card" data-section="history">
+        <div class="card-head">
+          <div class="title-row">
+            <h2>Forecast History</h2>
+            <div class="tools">
+              <details class="export-menu" data-chart="chart-history">
+                <summary class="download" title="Download as PNG">PNG ▾</summary>
+                <div class="menu" role="menu">
+                  <button type="button" role="menuitem" data-bg="light">Light background</button>
+                  <button type="button" role="menuitem" data-bg="dark">Dark background</button>
+                  <button type="button" role="menuitem" data-bg="transparent">Transparent</button>
+                </div>
+              </details>
+            </div>
+          </div>
+          <p class="subtle">Each point is the finish date this page would have projected on that date. A flat line means a stable forecast; a rising line means the date keeps slipping.</p>
+          <p class="hint" id="history-why"></p>
+        </div>
+        <div class="chart-box"><canvas id="chart-history" role="img" aria-label="Projected finish date as of each past week"></canvas></div>
       </section>
 
       <div class="grid-2">
@@ -254,6 +280,10 @@
           <dt>Ticket flow: created vs completed, or net</dt>
           <dd>“Created vs completed” shows both counts side by side for each week. “Net” shows completed minus created: a positive bar means the backlog shrank that week, a negative bar means it grew. The line is the running total since the release started.
             The page shows the net view when at least 15% of tickets were created after the release started, and the side-by-side view otherwise.</dd>
+          <dt>Forecast history</dt>
+          <dd>The whole projection re-run as of the end of each past week, with the same settings and release start, so you can see whether the finish date is holding or slipping. The trend figure is the average change in the P50 date per week of real time, from a straight-line fit through the points.</dd>
+          <dt>Data quality</dt>
+          <dd>Checks for things that commonly skew a forecast: tracking tickets (such as a “Release” ticket) counted as work, unestimated, zero-point or very large tickets, unassigned or stale (30+ days without an update) open tickets, work finished before the release start, and tickets shared with other fix versions. Some findings offer a one-click fix that changes the settings.</dd>
           <dt>Linear regression</dt>
           <dd>A least-squares straight line through cumulative completed work for each day in the fit window. Its slope is projected forward from the actual completed work on the as-of date until it reaches today's total scope. The faint line on the burn-up shows the fit itself.</dd>
           <dt>Linear + scope growth</dt>

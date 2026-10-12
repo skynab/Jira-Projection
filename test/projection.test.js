@@ -101,6 +101,30 @@ const sm = P.buildModel(P.parseIssues(slow.join('\n')), { asOf: new Date(2026, 1
 if (sm.projections.poly.day == null) {
   assert(sm.projections.poly.stopDay == null || sm.projections.poly.stopDay >= sm.T);
 }
+// Data quality: a tracking ticket, an unestimated ticket and a ticket done before the start.
+const dq = P.parseIssues([
+  'Issue key,Issue Type,Status,Resolution,Assignee,Created,Updated,Resolved,Custom field (Story Points),Fix versions,Fix versions',
+  'Q-1,Story,Done,Done,Ann,01/Jan/26 9:00 AM,05/Jan/26 9:00 AM,05/Jan/26 9:00 AM,3,R1,',
+  'Q-2,Story,Done,Done,Ann,01/Jan/26 9:00 AM,07/Jan/26 9:00 AM,07/Jan/26 9:00 AM,3,R1,',
+  'Q-3,Release,To Do,,Bob,01/Jan/26 9:00 AM,07/Jan/26 9:00 AM,,3,R1,',
+  'Q-4,Story,To Do,,,01/Jan/26 9:00 AM,07/Jan/26 9:00 AM,,,R1,R0',
+].join('\n'));
+const dqm = P.buildModel(dq, { start: new Date(2026, 0, 12).getTime(), asOf: new Date(2026, 0, 19).getTime() });
+const ids = dqm.quality.map((q) => q.id);
+assert(ids.includes('tracking:Release'));
+assert.deepStrictEqual(dqm.quality.find((q) => q.id === 'tracking:Release').fix, { type: 'excludeType', value: 'Release', label: 'Exclude Release tickets' });
+assert(ids.includes('unestimated') && ids.includes('unassigned') && ids.includes('multi-version'));
+assert(ids.includes('before-start')); // Q-1/Q-2 finished before the week of 12 Jan
+assert.strictEqual(dqm.quality[0].severity, 'warning'); // warnings sort first
+// Excluding the type clears that finding.
+assert(!P.buildModel(dq, { excludedTypes: ['Release'] }).quality.some((q) => q.id === 'tracking:Release'));
+
+// Forecast history: one point per finished week after the first two, plus the as-of date.
+const hm = P.buildModel(data, { asOf: new Date(2026, 0, 19).getTime() });
+const hist = P.forecastHistory(data, { asOf: new Date(2026, 0, 19).getTime() }, hm);
+assert.strictEqual(hist[hist.length - 1].asOf, hm.asOf);
+assert(hist.every((h, i) => i === 0 || h.asOf > hist[i - 1].asOf));
+assert.strictEqual(hist[hist.length - 1].linear, hm.projections.linear.day);
 console.log('unit tests passed');
 
 // Smoke-test real exports passed on the command line.

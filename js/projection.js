@@ -575,9 +575,12 @@
     }
     horizon = Math.ceil(Math.min(T + MAX_HORIZON_DAYS, horizon));
 
+    const quality = dataQuality({ s, scopeRows, openRows, doneRows, start, asOfEnd, fill });
+
     return {
       settings: s,
       warnings,
+      quality,
       start, asOf, T, horizon,
       unit: s.unit,
       totals: {
@@ -664,6 +667,150 @@
     };
   }
 
+  // ---------------------------------------------------------------- data quality
+  // Things in the export that commonly skew a forecast. Each finding names the tickets
+  // involved and, where there is an obvious one, a fix the page can apply.
+
+  const TRACKING_TYPES = /^(release|epic|initiative|test plan|test execution|test set)$/i;
+  const STALE_DAYS = 30;
+
+  function dataQuality({ s, scopeRows, openRows, doneRows, start, asOfEnd, fill }) {
+    const out = [];
+    const u = UNIT_ABBR[s.unit];
+    const keys = (rows) => rows.map((r) => r.it.key);
+    const sum = (rows) => round(rows.reduce((a, r) => a + r.est, 0));
+    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+    // Tracking tickets (a "Release" ticket, epics...) count as work but usually aren't.
+    const byType = new Map();
+    for (const r of openRows) if (TRACKING_TYPES.test(r.it.type)) byType.set(r.it.type, [...(byType.get(r.it.type) || []), r]);
+    for (const [type, rows] of byType) {
+      out.push({
+        id: `tracking:${type}`, severity: 'warning',
+        title: `${plural(rows.length, `open “${type}” ticket`)} counted as work`,
+        detail: `${type} tickets usually track work rather than being work. ${rows.length === 1 ? 'It adds' : 'They add'} ${sum(rows)} ${u} to remaining work and can make ${rows.length === 1 ? 'its assignee' : 'their assignees'} look like the bottleneck.`,
+        keys: keys(rows), fix: { type: 'excludeType', value: type, label: `Exclude ${type} tickets` },
+      });
+    }
+
+    if (s.unit !== 'count') {
+      const missing = openRows.filter((r) => r.missing);
+      if (missing.length) {
+        const how = s.fillMissing === 'zero' ? 'counted as zero' : `given the ${s.fillMissing} estimate (${round(fill)} ${u})`;
+        out.push({
+          id: 'unestimated', severity: missing.length / openRows.length > 0.2 ? 'warning' : 'info',
+          title: `${plural(missing.length, 'open ticket')} without an estimate`,
+          detail: `${missing.length === 1 ? 'It is' : 'They are'} ${how}. Estimating ${missing.length === 1 ? 'it' : 'them'} in Jira makes the forecast more reliable.`,
+          keys: keys(missing),
+        });
+      }
+      const zero = scopeRows.filter((r) => !r.missing && r.est === 0);
+      if (zero.length) {
+        out.push({
+          id: 'zero', severity: 'info',
+          title: `${plural(zero.length, 'ticket')} estimated at 0 ${u}`,
+          detail: 'They count as no work, so they never move the burn-down or velocity.',
+          keys: keys(zero),
+        });
+      }
+      const big = openRows.filter((r) => !r.missing && r.est >= (s.unit === 'points' ? 13 : 10));
+      if (big.length) {
+        out.push({
+          id: 'large', severity: 'info',
+          title: `${plural(big.length, 'large open ticket')} (${s.unit === 'points' ? '13+ points' : '10+ days'})`,
+          detail: `${sum(big)} ${u} of the remaining work sits in ${big.length === 1 ? 'this ticket' : 'these tickets'}, so ${big.length === 1 ? 'it dominates' : 'they dominate'} the uncertainty. Splitting ${big.length === 1 ? 'it' : 'them'} would tighten the range.`,
+          keys: keys(big),
+        });
+      }
+    }
+
+    const unassigned = openRows.filter((r) => !r.it.assignee);
+    if (unassigned.length) {
+      out.push({
+        id: 'unassigned', severity: 'info',
+        title: `${plural(unassigned.length, 'open ticket')} unassigned`,
+        detail: `${sum(unassigned)} ${u} with no owner. The assignee bottleneck can't account for ${unassigned.length === 1 ? 'it' : 'them'}.`,
+        keys: keys(unassigned),
+      });
+    }
+
+    const stale = openRows.filter((r) => r.it.updated && r.it.updated <= asOfEnd && (asOfEnd - r.it.updated) / MS_DAY > STALE_DAYS);
+    if (stale.length) {
+      out.push({
+        id: 'stale', severity: 'info',
+        title: `${plural(stale.length, 'open ticket')} not updated in ${STALE_DAYS}+ days`,
+        detail: 'Check whether they still belong in this release.',
+        keys: keys(stale),
+      });
+    }
+
+    const early = doneRows.filter((r) => r.doneAt < start);
+    if (early.length) {
+      const first = mondayOf(Math.min(...early.map((r) => r.doneAt)));
+      out.push({
+        id: 'before-start', severity: 'warning',
+        title: `${plural(early.length, 'ticket')} finished before the release start`,
+        detail: `${sum(early)} ${u} count as already done on day one, so they don't show up in velocity. Either the start date is too late or older work was moved into this version.`,
+        keys: keys(early), fix: { type: 'setStart', value: first, label: 'Start the release earlier' },
+      });
+    }
+
+    const shared = scopeRows.filter((r) => r.it.versions.length > 1);
+    if (shared.length) {
+      out.push({
+        id: 'multi-version', severity: 'info',
+        title: `${plural(shared.length, 'ticket')} in more than one fix version`,
+        detail: 'They count in full here and in the other versions too, which can double-count work across release forecasts.',
+        keys: keys(shared),
+      });
+    }
+
+    const rank = { warning: 0, info: 1 };
+    return out.sort((a, b) => rank[a.severity] - rank[b.severity]);
+  }
+
+  // ---------------------------------------------------------------- forecast history
+  // Re-runs the whole model as of the end of each past week (plus the current as-of
+  // date) with the release start held fixed, so every run is on the same day axis.
+
+  function forecastHistory(data, userSettings, model) {
+    if (model.empty) return [];
+    const s = Object.assign({}, userSettings, { start: model.start, mcRuns: 2000 });
+    const dates = [];
+    // Start once two full weeks exist; earlier forecasts are mostly noise.
+    for (let w = 1; ; w++) {
+      const d = addDays(model.start, w * 7 + 6);
+      if (d >= model.asOf) break;
+      dates.push(d);
+    }
+    dates.push(model.asOf);
+    return dates.map((asOf) => {
+      const m = asOf === model.asOf ? model : buildModel(data, Object.assign({}, s, { asOf }));
+      const point = { asOf, day: dayDiff(asOf, model.start) };
+      if (m.empty) return point;
+      if (m.finished) return Object.assign(point, { finished: true });
+      const p = m.projections;
+      const finite = (v) => (v != null && isFinite(v) ? v : null);
+      return Object.assign(point, {
+        p50: p.monteCarlo ? finite(p.monteCarlo.p50) : null,
+        p85: p.monteCarlo ? finite(p.monteCarlo.p85) : null,
+        linear: finite(p.linear.day),
+        scopeGrowth: p.scopeGrowth ? finite(p.scopeGrowth.day) : null,
+        velocity: finite(p.velocity.day),
+      });
+    });
+  }
+
+  // Average change in a forecast series (days of finish date per week of as-of date).
+  function forecastDrift(history, key) {
+    const pts = history.filter((h) => h[key] != null);
+    if (pts.length < 2) return null;
+    const fit = linearFit(pts.map((h) => h.day), pts.map((h) => h[key]));
+    return fit ? { perWeek: fit.slope * 7, first: pts[0], last: pts[pts.length - 1] } : null;
+  }
+
+  const UNIT_ABBR = { points: 'pts', days: 'days', count: 'tickets' };
+
   function unitWord(unit) {
     return unit === 'points' ? 'story point' : unit === 'days' ? 'Original estimate' : 'ticket';
   }
@@ -674,7 +821,7 @@
 
   const api = {
     MS_DAY, FIB, DEFAULT_SETTINGS, DELIVERED_RESOLUTIONS, SCOPE_CHURN_THRESHOLD,
-    parseCsv, parseIssues, parseJiraDate, estimateToDays, buildModel,
+    parseCsv, parseIssues, parseJiraDate, estimateToDays, buildModel, forecastHistory, forecastDrift,
     linearFit, polyFit, fibDown, fibUp, dayStart, addDays, dayDiff, mondayOf, round,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
