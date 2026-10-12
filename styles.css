@@ -210,6 +210,14 @@ main { padding-bottom: 48px; }
 .data-table td.num, .data-table th.num { text-align: right; }
 .data-table tr:last-child td { border-bottom: none; }
 .data-table .nowrap { white-space: nowrap; }
+.data-table th button.sort {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; text-align: inherit;
+}
+.data-table th.num button.sort { flex-direction: row-reverse; }
+.data-table th button.sort:hover { color: var(--text-primary); }
+.data-table th[aria-sort="ascending"], .data-table th[aria-sort="descending"] { color: var(--text-primary); }
+.sort-arrow { font-size: 9px; min-width: 9px; }
 .data-table .note { color: var(--text-muted); font-size: 12.5px; }
 .key-swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 8px; }
 .key-swatch.dashed { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; }

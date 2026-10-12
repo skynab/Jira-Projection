@@ -751,18 +751,69 @@
     });
   }
 
+  // ---------------------------------------------------------------- sortable tables
+  // Click a header to sort; click again to reverse. Text starts A→Z, numbers and dates
+  // start largest-first, and blank values always sort last.
+
+  const sortState = {
+    'assignee-table': { key: 'day', dir: -1 },
+    'remaining-table': { key: 'est', dir: -1 },
+  };
+  const tableArgs = {};
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+  function renderSortable(id, columns, rows, rowHtml) {
+    tableArgs[id] = [columns, rows, rowHtml];
+    const state = sortState[id];
+    const col = columns.find((c) => c.key === state.key) || columns[0];
+    const sorted = rows.slice().sort((a, b) => {
+      const va = col.value(a), vb = col.value(b);
+      const blankA = va == null || va === '', blankB = vb == null || vb === '';
+      if (blankA || blankB) return blankA === blankB ? 0 : blankA ? 1 : -1;
+      const cmp = col.num ? va - vb : collator.compare(va, vb);
+      // Ties fall back to the first column (key or name), always A→Z.
+      return cmp * state.dir || collator.compare(String(columns[0].value(a) ?? '~'), String(columns[0].value(b) ?? '~'));
+    });
+    $(id).innerHTML = '<thead><tr>' + columns.map((c) => {
+      const active = c.key === col.key;
+      const aria = active ? (state.dir > 0 ? 'ascending' : 'descending') : 'none';
+      const right = c.num && c.align !== 'left';
+      return `<th class="${right ? 'num ' : ''}${c.className || ''}" aria-sort="${aria}">` +
+        `<button type="button" class="sort" data-key="${c.key}">${c.label}<span class="sort-arrow" aria-hidden="true">${active ? (state.dir > 0 ? '▲' : '▼') : ''}</span></button></th>`;
+    }).join('') + '</tr></thead><tbody>' + sorted.map(rowHtml).join('') + '</tbody>';
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('th button.sort');
+    if (!btn) return;
+    const id = btn.closest('table').id;
+    if (!tableArgs[id]) return;
+    const [columns] = tableArgs[id];
+    const col = columns.find((c) => c.key === btn.dataset.key);
+    const state = sortState[id];
+    if (state.key === col.key) state.dir = -state.dir;
+    else { state.key = col.key; state.dir = col.num ? -1 : 1; }
+    renderSortable(id, ...tableArgs[id]);
+    $(id).querySelector(`th button[data-key="${col.key}"]`).focus();
+  });
+
   function renderRemaining(model) {
     const u = unitShort(model.unit);
     if (!model.openRows.length) {
       $('remaining-table').innerHTML = '<tr><td>No open tickets.</td></tr>';
       return;
     }
-    $('remaining-table').innerHTML =
-      `<thead><tr><th class="nowrap">Key</th><th>Summary</th><th>Type</th><th>Status</th><th>Assignee</th><th class="num">Estimate (${u})</th></tr></thead><tbody>` +
-      model.openRows.map((r) =>
-        `<tr><td class="nowrap">${esc(r.it.key)}</td><td>${esc(r.it.summary)}</td><td>${esc(r.it.type)}</td><td class="nowrap">${r.resolvedLater ? 'Open on as-of date' : esc(r.it.status)}</td><td class="nowrap">${esc(r.it.assignee || '—')}</td>` +
-        `<td class="num">${fmtNum(r.est)}${r.missing ? ' <span class="note">(filled)</span>' : ''}</td></tr>`).join('') +
-      '</tbody>';
+    const status = (r) => (r.resolvedLater ? 'Open on as-of date' : r.it.status);
+    renderSortable('remaining-table', [
+      { key: 'key', label: 'Key', value: (r) => r.it.key, className: 'nowrap' },
+      { key: 'summary', label: 'Summary', value: (r) => r.it.summary },
+      { key: 'type', label: 'Type', value: (r) => r.it.type },
+      { key: 'status', label: 'Status', value: status },
+      { key: 'assignee', label: 'Assignee', value: (r) => r.it.assignee },
+      { key: 'est', label: `Estimate (${u})`, num: true, value: (r) => r.est },
+    ], model.openRows, (r) =>
+      `<tr><td class="nowrap">${esc(r.it.key)}</td><td>${esc(r.it.summary)}</td><td>${esc(r.it.type)}</td><td class="nowrap">${esc(status(r))}</td><td class="nowrap">${esc(r.it.assignee || '—')}</td>` +
+      `<td class="num">${fmtNum(r.est)}${r.missing ? ' <span class="note">(filled)</span>' : ''}</td></tr>`);
   }
 
   function renderWeekly(model) {
@@ -788,12 +839,17 @@
       return;
     }
     const worst = model.projections.bottleneck && model.projections.bottleneck.name;
-    $('assignee-table').innerHTML =
-      `<thead><tr><th>Assignee</th><th class="num">Open tickets</th><th class="num">Remaining (${u})</th><th class="num">Completed / wk</th><th>Projected finish</th></tr></thead><tbody>` +
-      list.map((a) => `<tr><td>${esc(a.name)}${a.name === worst ? ' <span class="note">(bottleneck)</span>' : ''}</td>` +
-        `<td class="num">${a.open}</td><td class="num">${fmtNum(a.remaining)}</td><td class="num">${fmtNum(a.perWeek)}</td>` +
-        `<td>${a.remaining <= 0 ? '<span class="note">Nothing open</span>' : a.day == null ? `<span class="note">${esc(a.note || '—')}</span>` : fmtDay(model, a.day)}</td></tr>`).join('') +
-      '</tbody>';
+    renderSortable('assignee-table', [
+      // "Unassigned" is not a person, so it sorts with the blanks at the end.
+      { key: 'name', label: 'Assignee', value: (a) => (a.name === 'Unassigned' ? null : a.name) },
+      { key: 'open', label: 'Open tickets', num: true, value: (a) => a.open },
+      { key: 'remaining', label: `Remaining (${u})`, num: true, value: (a) => a.remaining },
+      { key: 'perWeek', label: 'Completed / wk', num: true, value: (a) => a.perWeek },
+      // People with nothing open finish "now"; unprojectable people sort last.
+      { key: 'day', label: 'Projected finish', num: true, align: 'left', value: (a) => (a.remaining <= 0 ? model.T : a.day) },
+    ], list, (a) => `<tr><td>${esc(a.name)}${a.name === worst ? ' <span class="note">(bottleneck)</span>' : ''}</td>` +
+      `<td class="num">${a.open}</td><td class="num">${fmtNum(a.remaining)}</td><td class="num">${fmtNum(a.perWeek)}</td>` +
+      `<td>${a.remaining <= 0 ? '<span class="note">Nothing open</span>' : a.day == null ? `<span class="note">${esc(a.note || '—')}</span>` : fmtDay(model, a.day)}</td></tr>`);
   }
 
   // Plain-text summary for pasting into Slack, email or a ticket.

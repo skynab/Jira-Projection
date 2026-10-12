@@ -34,7 +34,7 @@ Columns the app reads: `Issue key`, `Issue Type`, `Summary`, `Status`, `Status c
 - **Ticket completion rate**, with two views: created vs completed per week, or net (completed − created) per week with a running total. Either view can be grouped per week or per 2 weeks (counted from the release start). Positive weeks mean the backlog shrank. The net view is picked automatically when at least 15% of tickets were created after the release started.
 - **Chance of finishing by date** from the Monte Carlo simulation.
 - **Remaining work by assignee**: each person's open work divided by their own recent throughput. The slowest person is reported as the assignee bottleneck.
-- **Remaining tickets** table, plus a collapsible table of the weekly numbers behind the charts.
+- **Remaining tickets** table, plus a collapsible table of the weekly numbers behind the charts. The assignee and remaining-ticket tables sort by any column when you click its header.
 
 Monte Carlo options:
 - **Randomise ticket sizes** (on by default): each open ticket's size is drawn from its optimistic, estimated or pessimistic size.
