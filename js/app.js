@@ -252,30 +252,34 @@
     }
     const sw = (color, dashed) => `<span class="key-swatch${dashed ? ' dashed' : ''}" style="background:${color};color:${color}"></span>`;
     const rows = [
-      [sw(c.s2, true) + 'Linear regression', p.linear.day, p.linear.note || (f.linear ? `R² ${fmtNum(f.linear.r2, 2)} · ${fmtNum(f.linear.slope * 7)} ${u}/wk trend` : '')],
-      [sw(c.scope, true) + 'Linear + scope growth', p.scopeGrowth && p.scopeGrowth.day, (p.scopeGrowth && p.scopeGrowth.note) ||
+      [sw(c.s2, true), 'Linear regression', p.linear.day, p.linear.note || (f.linear ? `R² ${fmtNum(f.linear.r2, 2)} · ${fmtNum(f.linear.slope * 7)} ${u}/wk trend` : '')],
+      [sw(c.scope, true), 'Linear + scope growth', p.scopeGrowth && p.scopeGrowth.day, (p.scopeGrowth && p.scopeGrowth.note) ||
         (f.scope ? `Scope growing ${fmtNum(f.scope.slope * 7)} ${u}/wk → ~${fmtNum(p.scopeGrowth.scopeAt, 0)} ${u} at finish` : '')],
-      [sw(c.s3, true) + `Polynomial regression (degree ${model.settings.polyDegree})`, p.poly.day, p.poly.note || (f.poly ? `R² ${fmtNum(f.poly.r2, 3)}` : '')],
-      ['Average velocity', p.velocity.day, p.velocity.note || `${fmtNum(model.totals.remaining)} ${u} ÷ ${fmtNum(model.totals.avgVelocity)} ${u}/wk`],
-      [sw(c.s4) + 'Optimistic bound', p.optimistic.day, `${fmtNum(p.optimistic.amount)} ${u} at ${fmtNum(p.optimistic.velocity)} ${u}/wk (fastest)`],
-      [sw(c.s4) + 'Pessimistic bound', p.pessimistic.day, `${fmtNum(p.pessimistic.amount)} ${u} at ${fmtNum(p.pessimistic.velocity)} ${u}/wk (slowest)`],
-      ['Ticket completion rate', p.tickets.day, `${p.tickets.left} tickets ÷ ${fmtNum(p.tickets.perWeek)} tickets/wk`],
-      ['Assignee bottleneck', p.bottleneck.day, [p.bottleneck.name && `${p.bottleneck.name} finishes last`, p.bottleneck.note].filter(Boolean).join('. ')],
+      [sw(c.s3, true), `Polynomial regression (degree ${model.settings.polyDegree})`, p.poly.day, p.poly.note || (f.poly ? `R² ${fmtNum(f.poly.r2, 3)}` : '')],
+      ['', 'Average velocity', p.velocity.day, p.velocity.note || `${fmtNum(model.totals.remaining)} ${u} ÷ ${fmtNum(model.totals.avgVelocity)} ${u}/wk`],
+      [sw(c.s4), 'Optimistic bound', p.optimistic.day, `${fmtNum(p.optimistic.amount)} ${u} at ${fmtNum(p.optimistic.velocity)} ${u}/wk (fastest)`],
+      [sw(c.s4), 'Pessimistic bound', p.pessimistic.day, `${fmtNum(p.pessimistic.amount)} ${u} at ${fmtNum(p.pessimistic.velocity)} ${u}/wk (slowest)`],
+      ['', 'Ticket completion rate', p.tickets.day, `${p.tickets.left} tickets ÷ ${fmtNum(p.tickets.perWeek)} tickets/wk`],
+      ['', 'Assignee bottleneck', p.bottleneck.day, [p.bottleneck.name && `${p.bottleneck.name} finishes last`, p.bottleneck.note].filter(Boolean).join('. ')],
     ];
     if (p.monteCarlo) {
       const opts = [model.settings.mcUncertainty && model.unit !== 'count' && 'randomised sizes', model.settings.mcScopeGrowth && 'with scope growth'].filter(Boolean);
       const how = opts.length ? ` (${opts.join(', ')})` : '';
-      rows.push(['Monte Carlo P50', p.monteCarlo.p50, `50% of simulations finished by here${how}`]);
-      rows.push(['Monte Carlo P85', p.monteCarlo.p85, `85% of simulations finished by here${how}`]);
-      rows.push(['Monte Carlo P95', p.monteCarlo.p95, `95% of simulations finished by here${how}`]);
+      rows.push(['', 'Monte Carlo P50', p.monteCarlo.p50, `50% of simulations finished by here${how}`]);
+      rows.push(['', 'Monte Carlo P85', p.monteCarlo.p85, `85% of simulations finished by here${how}`]);
+      rows.push(['', 'Monte Carlo P95', p.monteCarlo.p95, `95% of simulations finished by here${how}`]);
     } else {
-      rows.push(['Monte Carlo', null, 'Needs at least one full week with completed work']);
+      rows.push(['', 'Monte Carlo', null, 'Needs at least one full week with completed work']);
     }
-    $('projection-table').innerHTML =
-      '<thead><tr><th>Method</th><th>Projected finish</th><th class="num">Days from as-of</th><th>Details</th></tr></thead><tbody>' +
-      rows.map(([name, day, note]) =>
-        `<tr><td>${name}</td><td class="nowrap">${fmtDay(model, day)}</td><td class="num">${day == null || !isFinite(day) ? '—' : Math.round(day - model.T)}</td><td class="note">${esc(note || '')}</td></tr>`).join('') +
-      '</tbody>';
+    // Only Details wraps; method, date and day count always stay on one line.
+    renderSortable('projection-table', [
+      { key: 'method', label: 'Method', value: (r) => r[1] },
+      { key: 'date', label: 'Projected finish', num: true, align: 'left', value: (r) => r[2] },
+      { key: 'days', label: 'Days from as-of', num: true, value: (r) => r[2] },
+      { key: 'details', label: 'Details', value: (r) => r[3] },
+    ], rows, ([swatch, name, day, note]) =>
+      `<tr><td class="nowrap">${swatch}${esc(name)}</td><td class="nowrap">${fmtDay(model, day)}</td>` +
+      `<td class="num nowrap">${day == null || !isFinite(day) ? '—' : Math.round(day - model.T)}</td><td class="note wrap">${esc(note || '')}</td></tr>`);
   }
 
   // ---------------------------------------------------------------- charts
@@ -755,7 +759,11 @@
   // Click a header to sort; click again to reverse. Text starts A→Z, numbers and dates
   // start largest-first, and blank values always sort last.
 
+  // key: null means "original order" (only the projections table starts that way, and a
+  // third click on the same header returns it there).
   const sortState = {
+    'projection-table': { key: null, dir: -1, resettable: true },
+    'weekly-table': { key: 'week', dir: 1 },
     'assignee-table': { key: 'day', dir: -1 },
     'remaining-table': { key: 'est', dir: -1 },
   };
@@ -765,17 +773,21 @@
   function renderSortable(id, columns, rows, rowHtml) {
     tableArgs[id] = [columns, rows, rowHtml];
     const state = sortState[id];
-    const col = columns.find((c) => c.key === state.key) || columns[0];
-    const sorted = rows.slice().sort((a, b) => {
-      const va = col.value(a), vb = col.value(b);
-      const blankA = va == null || va === '', blankB = vb == null || vb === '';
-      if (blankA || blankB) return blankA === blankB ? 0 : blankA ? 1 : -1;
-      const cmp = col.num ? va - vb : collator.compare(va, vb);
-      // Ties fall back to the first column (key or name), always A→Z.
-      return cmp * state.dir || collator.compare(String(columns[0].value(a) ?? '~'), String(columns[0].value(b) ?? '~'));
-    });
+    const col = state.key == null ? null : columns.find((c) => c.key === state.key) || columns[0];
+    const indexed = rows.map((row, i) => ({ row, i }));
+    if (col) {
+      indexed.sort((a, b) => {
+        const va = col.value(a.row), vb = col.value(b.row);
+        const blankA = va == null || va === '', blankB = vb == null || vb === '';
+        if (blankA || blankB) return blankA === blankB ? a.i - b.i : blankA ? 1 : -1;
+        const cmp = col.num ? (va === vb ? 0 : va < vb ? -1 : 1) : collator.compare(va, vb);
+        // Ties fall back to the original row order.
+        return cmp * state.dir || a.i - b.i;
+      });
+    }
+    const sorted = indexed.map((x) => x.row);
     $(id).innerHTML = '<thead><tr>' + columns.map((c) => {
-      const active = c.key === col.key;
+      const active = col != null && c.key === col.key;
       const aria = active ? (state.dir > 0 ? 'ascending' : 'descending') : 'none';
       const right = c.num && c.align !== 'left';
       return `<th class="${right ? 'num ' : ''}${c.className || ''}" aria-sort="${aria}">` +
@@ -791,8 +803,10 @@
     const [columns] = tableArgs[id];
     const col = columns.find((c) => c.key === btn.dataset.key);
     const state = sortState[id];
-    if (state.key === col.key) state.dir = -state.dir;
-    else { state.key = col.key; state.dir = col.num ? -1 : 1; }
+    const first = col.num ? -1 : 1;
+    if (state.key !== col.key) { state.key = col.key; state.dir = first; }
+    else if (state.resettable && state.dir !== first) state.key = null; // third click: original order
+    else state.dir = -state.dir;
     renderSortable(id, ...tableArgs[id]);
     $(id).querySelector(`th button[data-key="${col.key}"]`).focus();
   });
@@ -819,16 +833,19 @@
   function renderWeekly(model) {
     const u = unitShort(model.unit);
     let rollIdx = 0;
-    $('weekly-table').innerHTML =
-      `<thead><tr><th>Week of</th><th class="num">Completed (${u})</th><th class="num">Rolling avg (${u})</th><th class="num">Scope added (${u})</th>` +
-      '<th class="num">Tickets completed</th><th class="num">Tickets created</th><th class="num">Net tickets</th></tr></thead><tbody>' +
-      model.weeks.map((w) => {
-        const roll = w.complete ? model.rolling[rollIdx++] : null;
-        return `<tr><td class="nowrap">${dateFmt.format(w.start)}${w.complete ? '' : ' <span class="note">(partial)</span>'}</td>` +
-          `<td class="num">${fmtNum(w.velocity)}</td><td class="num">${fmtNum(roll)}</td><td class="num">${fmtNum(w.scopeAdded)}</td>` +
-          `<td class="num">${w.ticketsDone}</td><td class="num">${w.ticketsCreated}</td>` +
-          `<td class="num">${w.ticketsDone - w.ticketsCreated > 0 ? '+' : ''}${w.ticketsDone - w.ticketsCreated}</td></tr>`;
-      }).join('') + '</tbody>';
+    const rows = model.weeks.map((w) => ({ w, roll: w.complete ? model.rolling[rollIdx++] : null, net: w.ticketsDone - w.ticketsCreated }));
+    renderSortable('weekly-table', [
+      { key: 'week', label: 'Week of', num: true, align: 'left', value: (r) => r.w.start },
+      { key: 'velocity', label: `Completed (${u})`, num: true, value: (r) => r.w.velocity },
+      { key: 'roll', label: `Rolling avg (${u})`, num: true, value: (r) => r.roll },
+      { key: 'scope', label: `Scope added (${u})`, num: true, value: (r) => r.w.scopeAdded },
+      { key: 'done', label: 'Tickets completed', num: true, value: (r) => r.w.ticketsDone },
+      { key: 'created', label: 'Tickets created', num: true, value: (r) => r.w.ticketsCreated },
+      { key: 'net', label: 'Net tickets', num: true, value: (r) => r.net },
+    ], rows, ({ w, roll, net }) =>
+      `<tr><td class="nowrap">${dateFmt.format(w.start)}${w.complete ? '' : ' <span class="note">(partial)</span>'}</td>` +
+      `<td class="num">${fmtNum(w.velocity)}</td><td class="num">${fmtNum(roll)}</td><td class="num">${fmtNum(w.scopeAdded)}</td>` +
+      `<td class="num">${w.ticketsDone}</td><td class="num">${w.ticketsCreated}</td><td class="num">${net > 0 ? '+' : ''}${net}</td></tr>`);
   }
 
   function renderAssignees(model) {

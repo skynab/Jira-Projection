@@ -210,6 +210,11 @@ main { padding-bottom: 48px; }
 .data-table td.num, .data-table th.num { text-align: right; }
 .data-table tr:last-child td { border-bottom: none; }
 .data-table .nowrap { white-space: nowrap; }
+.data-table th { white-space: nowrap; vertical-align: bottom; }
+.data-table th button.sort { vertical-align: bottom; line-height: inherit; }
+/* Seven numeric columns: let these headers wrap rather than force sideways scrolling. */
+#weekly-table th { white-space: normal; }
+.data-table td.wrap { width: 100%; min-width: 120px; }
 .data-table th button.sort {
   font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
   display: inline-flex; align-items: center; gap: 4px; text-align: inherit;
@@ -262,6 +267,8 @@ body.printing .data-table th button.sort { cursor: default; }
 canvas.print-hidden { display: none !important; }
 .print-snapshot { display: block; width: 100%; height: 100%; object-fit: contain; }
 body.printing .data-table th .sort-arrow { display: none; }
+/* At print width the wide numeric tables may wrap their headers; the projections table keeps one-line headers. */
+body.printing #remaining-table th { white-space: normal; }
 #print-header { margin: 0 0 16px; }
 #print-header h1 { font-size: 22px; }
 .print-settings {
